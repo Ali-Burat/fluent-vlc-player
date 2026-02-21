@@ -10,12 +10,12 @@ dependencies:
   flutter:
     sdk: flutter
   
-  # VLC Player
-  flutter_vlc_player: ^7.4.2
+  # Video Player (官方)
+  video_player: ^2.8.2
+  chewie: ^1.7.4
   
   # State Management
   provider: ^6.1.1
-  riverpod: ^2.4.9
   flutter_riverpod: ^2.4.9
   
   # Local Storage
@@ -37,9 +37,6 @@ dependencies:
   # File Management
   file_picker: ^6.1.1
   permission_handler: ^11.1.0
-  
-  # Media
-  video_thumbnail: ^0.5.3
   
   # Utils
   uuid: ^4.2.2

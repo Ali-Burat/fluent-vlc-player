@@ -1,11 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_vlc_player/flutter_vlc_player.dart';
+import 'package:video_player/video_player.dart';
+import 'package:chewie/chewie.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import '../../core/theme/app_theme.dart';
-import '../../shared/providers/app_providers.dart';
 
 /// 播放器页面
 class PlayerPage extends ConsumerStatefulWidget {
@@ -23,188 +24,130 @@ class PlayerPage extends ConsumerStatefulWidget {
 }
 
 class _PlayerPageState extends ConsumerState<PlayerPage> {
-  late VlcPlayerController _controller;
+  late VideoPlayerController _videoController;
+  ChewieController? _chewieController;
   bool _isInitialized = false;
-  bool _showControls = true;
-  bool _isFullscreen = false;
-  bool _isMuted = false;
-  double _volume = 1.0;
-  double _playbackSpeed = 1.0;
   bool _isLooping = true;
   bool _isSeamlessLoop = true;
-  Timer? _hideControlsTimer;
-  Timer? _positionTimer;
+  Timer? _loopTimer;
 
   // 无感循环相关
-  static const int _loopPreloadMs = 500; // 提前500ms准备循环
-  bool _isPreparingLoop = false;
+  static const int _loopPreloadMs = 500;
 
   @override
   void initState() {
     super.initState();
     _initializePlayer();
-    _startHideControlsTimer();
   }
 
   Future<void> _initializePlayer() async {
-    _controller = VlcPlayerController.network(
-      widget.videoPath,
-      hwAcc: HwAcc.auto,
-      autoPlay: true,
-      options: VlcPlayerOptions(
-        advanced: VlcAdvancedOptions([
-          VlcAdvancedOptions.networkCaching(200),
-        ]),
-        audio: VlcAudioOptions([
-          VlcAudioOptions.audioTimeStretch(true),
-        ]),
-      ),
-    );
-
-    _controller.addListener(_onPlayerStateChanged);
-    
-    // 设置循环模式
-    await _controller.setLooping(_isSeamlessLoop);
-
-    setState(() {
-      _isInitialized = true;
-    });
-
-    _startPositionTimer();
-  }
-
-  void _onPlayerStateChanged() {
-    if (!mounted) return;
-
-    // 无感循环处理
-    if (_isSeamlessLoop && _controller.value.isEnded) {
-      _handleSeamlessLoop();
+    // 创建视频控制器
+    if (widget.videoPath.startsWith('http')) {
+      _videoController = VideoPlayerController.networkUrl(Uri.parse(widget.videoPath));
+    } else {
+      _videoController = VideoPlayerController.file(File(widget.videoPath));
     }
 
+    try {
+      await _videoController.initialize();
+      
+      // 设置循环
+      await _videoController.setLooping(_isSeamlessLoop);
+
+      // 创建Chewie控制器
+      _chewieController = ChewieController(
+        videoPlayerController: _videoController,
+        autoPlay: true,
+        looping: _isSeamlessLoop,
+        allowFullScreen: true,
+        allowMuting: true,
+        allowPlaybackSpeedChanging: true,
+        playbackSpeeds: const [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0],
+        optionsTranslation: OptionsTranslation(
+          optionsButtonButtonText: '设置',
+          subtitlesButtonText: '字幕',
+          cancelButtonText: '取消',
+        ),
+        additionalOptions: (context) => [
+          OptionItem(
+            onTap: () {
+              Navigator.pop(context);
+              _toggleSeamlessLoop();
+            },
+            iconData: _isSeamlessLoop 
+                ? FluentIcons.arrow_sync_24_filled 
+                : FluentIcons.arrow_sync_24_regular,
+            title: _isSeamlessLoop ? '关闭无感循环' : '开启无感循环',
+          ),
+        ],
+      );
+
+      // 监听播放状态
+      _videoController.addListener(_onVideoStateChanged);
+
+      // 启动无感循环检测
+      _startLoopDetection();
+
+      setState(() {
+        _isInitialized = true;
+      });
+    } catch (e) {
+      debugPrint('初始化播放器失败: $e');
+    }
+  }
+
+  void _onVideoStateChanged() {
+    if (!mounted) return;
     setState(() {});
+  }
+
+  /// 启动无感循环检测
+  void _startLoopDetection() {
+    _loopTimer?.cancel();
+    _loopTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
+      if (!mounted || !_isSeamlessLoop || !_videoController.value.isPlaying) {
+        return;
+      }
+
+      final position = _videoController.value.position;
+      final duration = _videoController.value.duration;
+
+      if (duration.inMilliseconds > 0) {
+        final remainingMs = duration.inMilliseconds - position.inMilliseconds;
+        
+        // 提前预加载循环
+        if (remainingMs < _loopPreloadMs && remainingMs > 0) {
+          _handleSeamlessLoop();
+        }
+      }
+    });
   }
 
   /// 无感循环处理
   Future<void> _handleSeamlessLoop() async {
-    if (_isPreparingLoop) return;
-    _isPreparingLoop = true;
-
+    if (!_isSeamlessLoop) return;
+    
     try {
-      // 立即跳转到开头并播放
-      await _controller.seekTo(Duration.zero);
-      await _controller.play();
-    } finally {
-      _isPreparingLoop = false;
+      await _videoController.seekTo(Duration.zero);
+      await _videoController.play();
+    } catch (e) {
+      debugPrint('循环播放失败: $e');
     }
   }
 
-  void _startPositionTimer() {
-    _positionTimer?.cancel();
-    _positionTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
-      if (!mounted) return;
-
-      final position = _controller.value.position;
-      final duration = _controller.value.duration;
-
-      // 无感循环预检测
-      if (_isSeamlessLoop && duration.inMilliseconds > 0) {
-        final remainingMs = duration.inMilliseconds - position.inMilliseconds;
-        if (remainingMs < _loopPreloadMs && remainingMs > 0 && !_isPreparingLoop) {
-          _handleSeamlessLoop();
-        }
-      }
-
-      setState(() {});
-    });
-  }
-
-  void _startHideControlsTimer() {
-    _hideControlsTimer?.cancel();
-    _hideControlsTimer = Timer(const Duration(seconds: 3), () {
-      if (_controller.value.isPlaying && mounted) {
-        setState(() {
-          _showControls = false;
-        });
-      }
-    });
-  }
-
-  void _toggleControls() {
-    setState(() {
-      _showControls = !_showControls;
-    });
-    if (_showControls) {
-      _startHideControlsTimer();
-    }
-  }
-
-  Future<void> _togglePlayPause() async {
-    if (_controller.value.isPlaying) {
-      await _controller.pause();
-    } else {
-      await _controller.play();
-    }
-    setState(() {});
-  }
-
-  Future<void> _seekTo(Duration position) async {
-    await _controller.seekTo(position);
-    setState(() {});
-  }
-
-  Future<void> _setPlaybackSpeed(double speed) async {
-    await _controller.setSpeed(speed);
-    setState(() {
-      _playbackSpeed = speed;
-    });
-  }
-
-  Future<void> _toggleMute() async {
-    if (_isMuted) {
-      await _controller.setVolume((_volume * 100).toInt());
-    } else {
-      await _controller.setVolume(0);
-    }
-    setState(() {
-      _isMuted = !_isMuted;
-    });
-  }
-
-  Future<void> _setVolume(double volume) async {
-    await _controller.setVolume((volume * 100).toInt());
-    setState(() {
-      _volume = volume;
-      _isMuted = volume == 0;
-    });
-  }
-
-  Future<void> _toggleLoopMode() async {
+  /// 切换无感循环
+  void _toggleSeamlessLoop() {
     setState(() {
       _isSeamlessLoop = !_isSeamlessLoop;
     });
-    await _controller.setLooping(_isSeamlessLoop);
-  }
-
-  void _toggleFullscreen() {
-    setState(() {
-      _isFullscreen = !_isFullscreen;
-    });
-
-    if (_isFullscreen) {
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-      SystemChrome.setPreferredOrientations([
-        DeviceOrientation.landscapeLeft,
-        DeviceOrientation.landscapeRight,
-      ]);
-    } else {
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-      SystemChrome.setPreferredOrientations([
-        DeviceOrientation.portraitUp,
-        DeviceOrientation.portraitDown,
-        DeviceOrientation.landscapeLeft,
-        DeviceOrientation.landscapeRight,
-      ]);
-    }
+    _videoController.setLooping(_isSeamlessLoop);
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(_isSeamlessLoop ? '已开启无感循环' : '已关闭无感循环'),
+        duration: const Duration(seconds: 1),
+      ),
+    );
   }
 
   String _formatDuration(Duration duration) {
@@ -220,10 +163,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
   @override
   void dispose() {
-    _hideControlsTimer?.cancel();
-    _positionTimer?.cancel();
-    _controller.removeListener(_onPlayerStateChanged);
-    _controller.dispose();
+    _loopTimer?.cancel();
+    _videoController.removeListener(_onVideoStateChanged);
+    _chewieController?.dispose();
+    _videoController.dispose();
     
     // 恢复系统UI
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -243,193 +186,72 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
     return Scaffold(
       backgroundColor: Colors.black,
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          // 视频播放器
-          GestureDetector(
-            onTap: _toggleControls,
-            onDoubleTap: _togglePlayPause,
-            child: Center(
-              child: _isInitialized
-                  ? VlcPlayer(
-                      controller: _controller,
-                      aspectRatio: 16 / 9,
-                      placeholder: const Center(
-                        child: CircularProgressIndicator(),
-                      ),
-                    )
-                  : const Center(
-                      child: CircularProgressIndicator(),
-                    ),
-            ),
-          ),
-
-          // 控制层
-          if (_showControls) _buildControlsOverlay(context, colorScheme),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildControlsOverlay(BuildContext context, ColorScheme colorScheme) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Colors.black.withOpacity(0.7),
-            Colors.transparent,
-            Colors.transparent,
-            Colors.black.withOpacity(0.7),
-          ],
-          stops: const [0, 0.2, 0.8, 1],
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        title: Text(
+          widget.videoName,
+          style: const TextStyle(fontSize: 16),
         ),
-      ),
-      child: Column(
-        children: [
-          _buildTopBar(context, colorScheme),
-          const Spacer(),
-          _buildCenterControls(context, colorScheme),
-          const Spacer(),
-          _buildBottomControls(context, colorScheme),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTopBar(BuildContext context, ColorScheme colorScheme) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(AppTheme.spacingM),
-        child: Row(
-          children: [
-            IconButton(
-              icon: const Icon(Icons.arrow_back, color: Colors.white),
-              onPressed: () => Navigator.pop(context),
+        actions: [
+          // 循环模式指示器
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: _isSeamlessLoop
+                  ? colorScheme.primary.withOpacity(0.8)
+                  : Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(16),
             ),
-            Expanded(
-              child: Text(
-                widget.videoName,
-                style: const TextStyle(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  _isSeamlessLoop
+                      ? FluentIcons.arrow_sync_24_filled
+                      : FluentIcons.arrow_sync_24_regular,
                   color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
+                  size: 14,
                 ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            // 循环模式指示器
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppTheme.spacingS,
-                vertical: AppTheme.spacingXS,
-              ),
-              decoration: BoxDecoration(
-                color: _isSeamlessLoop
-                    ? colorScheme.primary.withOpacity(0.8)
-                    : Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    _isSeamlessLoop
-                        ? FluentIcons.arrow_sync_24_filled
-                        : FluentIcons.arrow_sync_24_regular,
+                const SizedBox(width: 4),
+                Text(
+                  _isSeamlessLoop ? '无感循环' : '单次',
+                  style: const TextStyle(
                     color: Colors.white,
-                    size: 16,
+                    fontSize: 12,
                   ),
-                  const SizedBox(width: 4),
-                  Text(
-                    _isSeamlessLoop ? '无感循环' : '单次播放',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-            const SizedBox(width: AppTheme.spacingS),
-            IconButton(
-              icon: Icon(
-                _isFullscreen
-                    ? Icons.fullscreen_exit
-                    : Icons.fullscreen,
-                color: Colors.white,
-              ),
-              onPressed: _toggleFullscreen,
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
-    );
-  }
-
-  Widget _buildCenterControls(BuildContext context, ColorScheme colorScheme) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        // 快退
-        IconButton(
-          icon: const Icon(
-            FluentIcons.rewind_24_filled,
-            color: Colors.white,
-            size: 32,
-          ),
-          onPressed: () async {
-            final newPosition = _controller.value.position - const Duration(seconds: 10);
-            await _seekTo(newPosition.isNegative ? Duration.zero : newPosition);
-          },
-        ),
-        const SizedBox(width: AppTheme.spacingL),
-        // 播放/暂停
-        Container(
-          width: 72,
-          height: 72,
-          decoration: BoxDecoration(
-            color: colorScheme.primary,
-            shape: BoxShape.circle,
-          ),
-          child: IconButton(
-            icon: Icon(
-              _controller.value.isPlaying
-                  ? FluentIcons.pause_24_filled
-                  : FluentIcons.play_24_filled,
-              color: Colors.white,
-              size: 36,
+      body: Column(
+        children: [
+          Expanded(
+            child: Center(
+              child: _isInitialized && _chewieController != null
+                  ? Chewie(controller: _chewieController!)
+                  : const CircularProgressIndicator(),
             ),
-            onPressed: _togglePlayPause,
           ),
-        ),
-        const SizedBox(width: AppTheme.spacingL),
-        // 快进
-        IconButton(
-          icon: const Icon(
-            FluentIcons.fast_forward_24_filled,
-            color: Colors.white,
-            size: 32,
-          ),
-          onPressed: () async {
-            final newPosition = _controller.value.position + const Duration(seconds: 10);
-            final duration = _controller.value.duration;
-            await _seekTo(newPosition > duration ? duration : newPosition);
-          },
-        ),
-      ],
+          // 底部控制栏
+          if (_isInitialized) _buildBottomControls(context, colorScheme),
+        ],
+      ),
     );
   }
 
   Widget _buildBottomControls(BuildContext context, ColorScheme colorScheme) {
-    final position = _controller.value.position;
-    final duration = _controller.value.duration;
+    final position = _videoController.value.position;
+    final duration = _videoController.value.duration;
 
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(AppTheme.spacingM),
+    return Container(
+      color: Colors.black87,
+      padding: const EdgeInsets.all(AppTheme.spacingM),
+      child: SafeArea(
+        top: false,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -443,28 +265,24 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
                 Expanded(
                   child: SliderTheme(
                     data: SliderThemeData(
-                      trackHeight: 4,
+                      trackHeight: 3,
                       thumbShape: const RoundSliderThumbShape(
                         enabledThumbRadius: 6,
                       ),
-                      overlayShape: const RoundSliderOverlayShape(
-                        overlayRadius: 12,
-                      ),
                       activeTrackColor: colorScheme.primary,
-                      inactiveTrackColor: Colors.white.withOpacity(0.3),
+                      inactiveTrackColor: Colors.white24,
                       thumbColor: colorScheme.primary,
-                      overlayColor: colorScheme.primary.withOpacity(0.3),
                     ),
                     child: Slider(
                       value: duration.inMilliseconds > 0
-                          ? position.inMilliseconds.toDouble()
+                          ? position.inMilliseconds.toDouble().clamp(0, duration.inMilliseconds.toDouble())
                           : 0,
                       min: 0,
                       max: duration.inMilliseconds > 0
                           ? duration.inMilliseconds.toDouble()
                           : 1,
-                      onChanged: (value) async {
-                        await _seekTo(Duration(milliseconds: value.toInt()));
+                      onChanged: (value) {
+                        _videoController.seekTo(Duration(milliseconds: value.toInt()));
                       },
                     ),
                   ),
@@ -475,127 +293,59 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
                 ),
               ],
             ),
-            const SizedBox(height: AppTheme.spacingS),
             // 控制按钮
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // 音量
-                _buildControlButton(
-                  icon: _isMuted
-                      ? FluentIcons.speaker_mute_24_filled
-                      : FluentIcons.speaker_2_24_filled,
-                  label: '音量',
-                  onTap: _toggleMute,
-                  child: SizedBox(
-                    width: 100,
-                    child: Slider(
-                      value: _isMuted ? 0 : _volume,
-                      onChanged: _setVolume,
-                      activeColor: Colors.white,
-                      inactiveColor: Colors.white.withOpacity(0.3),
+                // 快退
+                IconButton(
+                  icon: const Icon(FluentIcons.rewind_24_filled, color: Colors.white),
+                  onPressed: () {
+                    final newPosition = position - const Duration(seconds: 10);
+                    _videoController.seekTo(
+                      newPosition.isNegative ? Duration.zero : newPosition,
+                    );
+                  },
+                ),
+                const SizedBox(width: 16),
+                // 播放/暂停
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: colorScheme.primary,
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    icon: Icon(
+                      _videoController.value.isPlaying
+                          ? FluentIcons.pause_24_filled
+                          : FluentIcons.play_24_filled,
+                      color: Colors.white,
+                      size: 28,
                     ),
+                    onPressed: () {
+                      if (_videoController.value.isPlaying) {
+                        _videoController.pause();
+                      } else {
+                        _videoController.play();
+                      }
+                      setState(() {});
+                    },
                   ),
                 ),
-                // 播放速度
-                _buildControlButton(
-                  icon: FluentIcons.top_speed_24_regular,
-                  label: '${_playbackSpeed}x',
-                  onTap: () => _showSpeedDialog(context),
-                ),
-                // 循环模式
-                _buildControlButton(
-                  icon: _isSeamlessLoop
-                      ? FluentIcons.arrow_sync_24_filled
-                      : FluentIcons.arrow_sync_24_regular,
-                  label: '循环',
-                  onTap: _toggleLoopMode,
-                  isActive: _isSeamlessLoop,
-                ),
-                // 画面比例
-                _buildControlButton(
-                  icon: FluentIcons.aspect_ratio_24_regular,
-                  label: '比例',
-                  onTap: () {
-                    // 切换画面比例
+                const SizedBox(width: 16),
+                // 快进
+                IconButton(
+                  icon: const Icon(FluentIcons.fast_forward_24_filled, color: Colors.white),
+                  onPressed: () {
+                    final newPosition = position + const Duration(seconds: 10);
+                    _videoController.seekTo(
+                      newPosition > duration ? duration : newPosition,
+                    );
                   },
                 ),
               ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildControlButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-    Widget? child,
-    bool isActive = false,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppTheme.spacingS,
-          vertical: AppTheme.spacingXS,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              color: isActive ? Colors.blue : Colors.white,
-              size: 24,
-            ),
-            if (child != null) child,
-            if (child == null)
-              Text(
-                label,
-                style: TextStyle(
-                  color: isActive ? Colors.blue : Colors.white,
-                  fontSize: 10,
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showSpeedDialog(BuildContext context) {
-    final speeds = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
-
-    showModalBottomSheet(
-      context: context,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(AppTheme.spacingM),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              '播放速度',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: AppTheme.spacingM),
-            Wrap(
-              spacing: AppTheme.spacingS,
-              children: speeds.map((speed) {
-                final isSelected = speed == _playbackSpeed;
-                return ChoiceChip(
-                  label: Text('${speed}x'),
-                  selected: isSelected,
-                  onSelected: (selected) {
-                    if (selected) {
-                      _setPlaybackSpeed(speed);
-                      Navigator.pop(context);
-                    }
-                  },
-                );
-              }).toList(),
             ),
           ],
         ),
