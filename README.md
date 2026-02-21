@@ -1,134 +1,95 @@
-# Fluent VLC Player
+# Fluent Player
 
 <div align="center">
-  <img src="assets/images/logo.png" alt="Fluent VLC Player Logo" width="120" height="120">
-  
-  <h3>A Modern Video Player with Material You Design</h3>
+  <h3>🎨 Material You 视频播放器</h3>
+  <p>基于 Flutter 的现代化视频播放器，支持无感循环播放和私密保险箱</p>
   
   <p>
-    <img src="https://img.shields.io/badge/Flutter-3.0+-blue.svg" alt="Flutter">
-    <img src="https://img.shields.io/badge/Platform-Android%20%7C%20iOS-green.svg" alt="Platform">
+    <img src="https://img.shields.io/badge/Flutter-3.19-blue.svg" alt="Flutter">
+    <img src="https://img.shields.io/badge/Platform-Android-green.svg" alt="Platform">
     <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License">
   </p>
 </div>
 
-## ✨ Features
+## ✨ 功能特性
 
-### 🎨 Material You Design
-- Dynamic color extraction from wallpaper
-- Fluent Design System inspired UI
-- Customizable accent colors
-- Light/Dark/AMOLED theme support
+### 🎨 Material You 设计
+- **动态颜色**: 根据壁纸自动生成主题颜色
+- **12种预设颜色**: 海洋蓝、青碧、翠绿、琥珀等
+- **主题模式**: 浅色/深色/跟随系统
+- **AMOLED深色**: 纯黑背景节省电量
 
-### 🎬 Advanced Video Playback
-- Based on VLC media player
-- Hardware acceleration support
-- Multiple video format support
-- Network stream playback
+### 🎬 视频播放器
+- **多格式支持**: MP4, AVI, MKV, MOV, WebM 等
+- **网络播放**: 支持URL直接播放
+- **播放速度**: 0.25x - 2.0x 可调
+- **手势控制**: 进度条拖动、音量调节
 
-### 🔄 Seamless Loop Playback
-- Zero-gap loop playback technology
-- No black screen between loops
-- Perfect for background videos and music videos
+### 🔄 无感循环播放
+- **零间隙循环**: 视频循环时无黑屏闪烁
+- **预加载技术**: 提前800ms准备循环
+- **完美衔接**: 适合背景视频、音乐MV
 
-### 🔒 Private Vault
-- AES-256 encryption for sensitive files
-- Password protection
-- Biometric authentication support
-- Auto-lock feature
+### 🔒 私密保险箱
+- **AES加密**: 文件采用AES-256加密存储
+- **密码保护**: 设置独立密码
+- **文件类型**: 支持视频、图片、文档
+- **安全删除**: 原文件自动删除
 
-### ⚙️ Local Settings
-- Remember playback position
-- Custom playback speed
-- Hardware acceleration toggle
-- Display preferences
+### ⚙️ 本地设置
+- **播放位置记忆**: 下次从上次位置继续
+- **主题偏好保存**: 自动记住您的选择
+- **播放设置持久化**: 循环、速度等设置
 
-## 📱 Screenshots
+## 📱 截图
 
-| Home Screen | Player | Vault | Settings |
-|-------------|--------|-------|----------|
-| ![Home](screenshots/home.png) | ![Player](screenshots/player.png) | ![Vault](screenshots/vault.png) | ![Settings](screenshots/settings.png) |
+| 首页 | 播放器 | 保险箱 | 设置 |
+|------|--------|--------|------|
+| 主界面 | 视频播放 | 加密存储 | 主题配置 |
 
-## 🚀 Getting Started
+## 🚀 快速开始
 
-### Prerequisites
-- Flutter SDK 3.0 or higher
-- Android Studio / Xcode
-- Android SDK (for Android)
-- CocoaPods (for iOS)
+### 环境要求
+- Flutter SDK 3.19+
+- Android SDK 21+
 
-### Installation
+### 安装运行
 
-1. Clone the repository
 ```bash
-git clone https://github.com/yourusername/fluent_vlc_player.git
-cd fluent_vlc_player
-```
+# 克隆仓库
+git clone https://github.com/Ali-Burat/fluent-vlc-player.git
+cd fluent-vlc-player
 
-2. Install dependencies
-```bash
+# 安装依赖
 flutter pub get
-```
 
-3. Run the app
-```bash
+# 运行
 flutter run
-```
 
-### Building for Release
-
-**Android:**
-```bash
+# 构建APK
 flutter build apk --release
 ```
 
-**iOS:**
-```bash
-flutter build ios --release
-```
+## 📦 下载
 
-## 📋 Supported Formats
+从 [Releases](https://github.com/Ali-Burat/fluent-vlc-player/releases) 页面下载最新APK。
 
-### Video
-MP4, AVI, MKV, MOV, WebM, FLV, WMV, TS, M3U8, and more...
+## 🛠️ 技术栈
 
-### Audio
-MP3, AAC, FLAC, WAV, OGG, M4A, and more...
+- **Flutter** - 跨平台UI框架
+- **video_player** - 视频播放
+- **chewie** - 播放器UI控件
+- **dynamic_color** - Material You动态颜色
+- **encrypt** - AES加密
+- **provider** - 状态管理
+- **shared_preferences** - 本地存储
 
-## 🔧 Configuration
+## 📄 许可证
 
-### Android
-Make sure to add these permissions in `AndroidManifest.xml`:
-```xml
-<uses-permission android:name="android.permission.INTERNET"/>
-<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
-<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
-```
-
-### iOS
-Add these to `Info.plist`:
-```xml
-<key>NSPhotoLibraryUsageDescription</key>
-<string>This app needs photo library access</string>
-```
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- [VLC](https://www.videolan.org/vlc/) - The best open-source media player
-- [Flutter VLC Player](https://github.com/solid-software/flutter_vlc_player) - Flutter VLC bindings
-- [Material Design 3](https://m3.material.io/) - Design guidelines
-- [Fluent UI System Icons](https://aka.ms/fluentui-system-icons) - Beautiful icons
+MIT License
 
 ---
 
 <div align="center">
-  Made with ❤️ by Fluent VLC Player Team
+  Made with ❤️ using Flutter
 </div>
