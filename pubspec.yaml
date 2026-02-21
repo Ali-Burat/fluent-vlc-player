@@ -1,5 +1,5 @@
 name: fluent_vlc_player
-description: A Fluent Video Player with Material You design, seamless loop playback, private vault, and customizable themes.
+description: A Fluent Video Player with Material You design.
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -9,30 +9,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  
-  # Video Player
-  video_player: ^2.8.2
-  
-  # State Management
-  provider: ^6.1.1
-  
-  # Local Storage
-  shared_preferences: ^2.2.2
-  path_provider: ^2.1.1
-  
-  # Material You
-  dynamic_color: ^1.6.8
-  
-  # File Management
-  file_picker: ^6.1.1
-  
-  # Utils
-  uuid: ^4.2.2
-  intl: ^0.18.1
-  
-  # Icons
   cupertino_icons: ^1.0.6
-  fluentui_system_icons: ^1.1.223
 
 dev_dependencies:
   flutter_test:
