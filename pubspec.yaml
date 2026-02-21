@@ -1,0 +1,78 @@
+name: fluent_vlc_player
+description: A Fluent VLC Player with Material You design, seamless loop playback, private vault, and customizable themes.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # VLC Player
+  flutter_vlc_player: ^7.4.2
+  
+  # State Management
+  provider: ^6.1.1
+  riverpod: ^2.4.9
+  flutter_riverpod: ^2.4.9
+  
+  # Local Storage
+  shared_preferences: ^2.2.2
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  path_provider: ^2.1.1
+  
+  # Encryption for Vault
+  encrypt: ^5.0.1
+  crypto: ^3.0.3
+  
+  # Material You / Dynamic Colors
+  dynamic_color: ^1.6.8
+  material_color_utilities: ^0.8.0
+  
+  # UI Components
+  flutter_animate: ^4.3.0
+  cached_network_image: ^3.3.0
+  shimmer: ^3.0.0
+  
+  # File Management
+  file_picker: ^6.1.1
+  permission_handler: ^11.1.0
+  
+  # Media
+  video_thumbnail: ^0.5.3
+  image_picker: ^1.0.5
+  
+  # Utils
+  uuid: ^4.2.2
+  intl: ^0.18.1
+  url_launcher: ^6.2.2
+  
+  # Icons
+  cupertino_icons: ^1.0.6
+  fluentui_system_icons: ^1.1.223
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+  hive_generator: ^2.0.1
+  build_runner: ^2.4.7
+
+flutter:
+  uses-material-design: true
+  
+  assets:
+    - assets/images/
+    - assets/icons/
+  
+  fonts:
+    - family: Roboto
+      fonts:
+        - asset: fonts/Roboto-Regular.ttf
+        - asset: fonts/Roboto-Medium.ttf
+          weight: 500
+        - asset: fonts/Roboto-Bold.ttf
+          weight: 700
