@@ -252,7 +252,7 @@ class _HomePageState extends State<HomePage> {
           Container(
             padding: const EdgeInsets.all(AppTheme.spacingL),
             decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerHighest,
+              color: colorScheme.surfaceVariant,
               borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
             ),
             child: Column(
@@ -294,7 +294,7 @@ class _HomePageState extends State<HomePage> {
                     width: 160,
                     margin: const EdgeInsets.only(right: AppTheme.spacingS),
                     decoration: BoxDecoration(
-                      color: colorScheme.surfaceContainerHighest,
+                      color: colorScheme.surfaceVariant,
                       borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
                     ),
                     child: Column(

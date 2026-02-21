@@ -181,7 +181,7 @@ class SettingsPage extends StatelessWidget {
     return SwitchListTile(
       title: const Text('自动循环播放'),
       subtitle: const Text('视频播放完毕后自动重新开始'),
-      secondary: const Icon(FluentIcons.repeat_all_24_filled),
+      secondary: const Icon(FluentIcons.arrow_sync_24_filled),
       value: settings.autoLoop,
       onChanged: (value) => settings.autoLoop = value,
     );
