@@ -25,62 +25,26 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.16.0'
+          flutter-version: '3.19.0'
           channel: 'stable'
           cache: true
+          cache-key: 'flutter-:os:-:channel:-:version:-:arch:-:hash:'
+          cache-path: '${{ runner.tool_cache }}/flutter/:channel:-:version:-:arch:'
+
+      - name: Flutter Doctor
+        run: flutter doctor -v
 
       - name: Get Dependencies
         run: flutter pub get
 
-      - name: Analyze Code
-        run: flutter analyze
-
       - name: Build APK
         run: flutter build apk --release
-
-      - name: Build App Bundle (AAB)
-        run: flutter build appbundle --release
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: fluent-vlc-player-apk
           path: build/app/outputs/flutter-apk/app-release.apk
-          retention-days: 30
-
-      - name: Upload AAB Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: fluent-vlc-player-aab
-          path: build/app/outputs/bundle/release/app-release.aab
-          retention-days: 30
-
-  build-ios:
-    name: Build iOS (No Codesign)
-    runs-on: macos-latest
-    
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.16.0'
-          channel: 'stable'
-          cache: true
-
-      - name: Get Dependencies
-        run: flutter pub get
-
-      - name: Build iOS (No Codesign)
-        run: flutter build ios --release --no-codesign
-
-      - name: Upload iOS Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: fluent-vlc-player-ios
-          path: build/ios/iphoneos/Runner.app
           retention-days: 30
 
   create-release:
