@@ -84,11 +84,7 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
         allowMuting: true,
         allowPlaybackSpeedChanging: true,
         playbackSpeeds: const [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0],
-        optionsTranslation: OptionsTranslation(
-          optionsButtonButtonText: '设置',
-          subtitlesButtonText: '字幕',
-          cancelButtonText: '取消',
-        ),
+
         additionalOptions: (context) => [
           OptionItem(
             onTap: () {

@@ -245,7 +245,7 @@ class _VaultPageState extends State<VaultPage> {
           width: 48,
           height: 48,
           decoration: BoxDecoration(
-            color: colorScheme.surfaceContainerHighest,
+            color: colorScheme.surfaceVariant,
             borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
           ),
           child: Icon(

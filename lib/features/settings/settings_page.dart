@@ -169,7 +169,7 @@ class SettingsPage extends StatelessWidget {
     return SwitchListTile(
       title: const Text('AMOLED 深色模式'),
       subtitle: const Text('使用纯黑背景节省电量'),
-      secondary: const Icon(FluentIcons.cell_phone_24_regular),
+      secondary: const Icon(FluentIcons.phone_24_regular),
       value: settings.useAmoledDark,
       onChanged: (value) => settings.useAmoledDark = value,
     );
@@ -181,7 +181,7 @@ class SettingsPage extends StatelessWidget {
     return SwitchListTile(
       title: const Text('自动循环播放'),
       subtitle: const Text('视频播放完毕后自动重新开始'),
-      secondary: const Icon(FluentIcons.repeat_all_24_regular),
+      secondary: const Icon(FluentIcons.repeat_all_24_filled),
       value: settings.autoLoop,
       onChanged: (value) => settings.autoLoop = value,
     );

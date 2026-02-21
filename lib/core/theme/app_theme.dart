@@ -41,7 +41,7 @@ class AppTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(radiusLarge),
         ),
-        color: colorScheme.surfaceContainerHighest,
+        color: colorScheme.surfaceVariant,
       ),
       
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -66,7 +66,7 @@ class AppTheme {
       
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: colorScheme.surfaceContainerHighest,
+        fillColor: colorScheme.surfaceVariant,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusMedium),
           borderSide: BorderSide.none,
@@ -85,7 +85,7 @@ class AppTheme {
       
       dialogTheme: DialogTheme(
         elevation: 0,
-        backgroundColor: colorScheme.surfaceContainerHigh,
+        backgroundColor: colorScheme.surfaceVariant,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(radiusXL),
         ),
@@ -100,7 +100,7 @@ class AppTheme {
       
       sliderTheme: SliderThemeData(
         activeTrackColor: colorScheme.primary,
-        inactiveTrackColor: colorScheme.surfaceContainerHighest,
+        inactiveTrackColor: colorScheme.surfaceVariant,
         thumbColor: colorScheme.primary,
       ),
     );
@@ -130,7 +130,7 @@ class AppTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(radiusLarge),
         ),
-        color: colorScheme.surfaceContainerHighest,
+        color: colorScheme.surfaceVariant,
       ),
       
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -146,7 +146,7 @@ class AppTheme {
       
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: colorScheme.surfaceContainerHighest,
+        fillColor: colorScheme.surfaceVariant,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusMedium),
           borderSide: BorderSide.none,
@@ -165,7 +165,7 @@ class AppTheme {
       
       dialogTheme: DialogTheme(
         elevation: 0,
-        backgroundColor: colorScheme.surfaceContainerHigh,
+        backgroundColor: colorScheme.surfaceVariant,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(radiusXL),
         ),
@@ -180,7 +180,7 @@ class AppTheme {
       
       sliderTheme: SliderThemeData(
         activeTrackColor: colorScheme.primary,
-        inactiveTrackColor: colorScheme.surfaceContainerHighest,
+        inactiveTrackColor: colorScheme.surfaceVariant,
         thumbColor: colorScheme.primary,
       ),
     );
