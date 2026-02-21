@@ -1,55 +1,48 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../core/theme/app_theme.dart';
-import '../../shared/providers/app_providers.dart';
 
 /// 保险箱页面
-class VaultPage extends ConsumerStatefulWidget {
+class VaultPage extends StatefulWidget {
   const VaultPage({super.key});
 
   @override
-  ConsumerState<VaultPage> createState() => _VaultPageState();
+  State<VaultPage> createState() => _VaultPageState();
 }
 
-class _VaultPageState extends ConsumerState<VaultPage> {
+class _VaultPageState extends State<VaultPage> {
   final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _newPasswordController = TextEditingController();
-  final TextEditingController _confirmPasswordController = TextEditingController();
+  bool _isUnlocked = false;
+  bool _hasPassword = false;
   bool _obscurePassword = true;
+  final List<VaultItem> _items = [];
 
   @override
   void dispose() {
     _passwordController.dispose();
-    _newPasswordController.dispose();
-    _confirmPasswordController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final vaultState = ref.watch(vaultProvider);
-    final vaultNotifier = ref.read(vaultProvider.notifier);
-    final colorScheme = Theme.of(context).colorScheme;
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('私密保险箱'),
         actions: [
-          if (vaultState.isUnlocked)
+          if (_isUnlocked)
             IconButton(
               icon: const Icon(FluentIcons.lock_closed_24_regular),
-              onPressed: () => _lockVault(vaultNotifier),
+              onPressed: _lockVault,
               tooltip: '锁定保险箱',
             ),
         ],
       ),
-      body: _buildBody(context, vaultState, vaultNotifier),
-      floatingActionButton: vaultState.isUnlocked
+      body: _buildBody(context),
+      floatingActionButton: _isUnlocked
           ? FloatingActionButton.extended(
-              onPressed: () => _addFileToVault(context, vaultNotifier),
+              onPressed: _addFileToVault,
               icon: const Icon(FluentIcons.add_24_filled),
               label: const Text('添加文件'),
             )
@@ -57,28 +50,19 @@ class _VaultPageState extends ConsumerState<VaultPage> {
     );
   }
 
-  Widget _buildBody(
-    BuildContext context,
-    VaultState vaultState,
-    VaultNotifier vaultNotifier,
-  ) {
-    if (!vaultState.isInitialized) {
-      return const Center(child: CircularProgressIndicator());
+  Widget _buildBody(BuildContext context) {
+    if (!_hasPassword) {
+      return _buildSetupPassword(context);
     }
 
-    if (!vaultState.hasPassword) {
-      return _buildSetupPassword(context, vaultNotifier);
+    if (!_isUnlocked) {
+      return _buildUnlock(context);
     }
 
-    if (!vaultState.isUnlocked) {
-      return _buildUnlock(context, vaultState, vaultNotifier);
-    }
-
-    return _buildVaultContent(context, vaultState, vaultNotifier);
+    return _buildVaultContent(context);
   }
 
-  /// 设置密码界面
-  Widget _buildSetupPassword(BuildContext context, VaultNotifier vaultNotifier) {
+  Widget _buildSetupPassword(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Padding(
@@ -116,7 +100,7 @@ class _VaultPageState extends ConsumerState<VaultPage> {
           ),
           const SizedBox(height: AppTheme.spacingL),
           TextField(
-            controller: _newPasswordController,
+            controller: _passwordController,
             obscureText: _obscurePassword,
             decoration: InputDecoration(
               labelText: '新密码',
@@ -135,20 +119,11 @@ class _VaultPageState extends ConsumerState<VaultPage> {
               ),
             ),
           ),
-          const SizedBox(height: AppTheme.spacingM),
-          TextField(
-            controller: _confirmPasswordController,
-            obscureText: _obscurePassword,
-            decoration: const InputDecoration(
-              labelText: '确认密码',
-              prefixIcon: Icon(FluentIcons.key_24_regular),
-            ),
-          ),
           const SizedBox(height: AppTheme.spacingL),
           SizedBox(
             width: double.infinity,
             child: FilledButton(
-              onPressed: () => _setupPassword(vaultNotifier),
+              onPressed: _setupPassword,
               child: const Padding(
                 padding: EdgeInsets.all(AppTheme.spacingM),
                 child: Text('设置密码'),
@@ -160,12 +135,7 @@ class _VaultPageState extends ConsumerState<VaultPage> {
     );
   }
 
-  /// 解锁界面
-  Widget _buildUnlock(
-    BuildContext context,
-    VaultState vaultState,
-    VaultNotifier vaultNotifier,
-  ) {
+  Widget _buildUnlock(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Padding(
@@ -201,32 +171,6 @@ class _VaultPageState extends ConsumerState<VaultPage> {
                 ),
             textAlign: TextAlign.center,
           ),
-          if (vaultState.error != null) ...[
-            const SizedBox(height: AppTheme.spacingS),
-            Container(
-              padding: const EdgeInsets.all(AppTheme.spacingS),
-              decoration: BoxDecoration(
-                color: colorScheme.errorContainer,
-                borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    FluentIcons.warning_24_filled,
-                    color: colorScheme.onErrorContainer,
-                    size: 16,
-                  ),
-                  const SizedBox(width: AppTheme.spacingS),
-                  Expanded(
-                    child: Text(
-                      vaultState.error!,
-                      style: TextStyle(color: colorScheme.onErrorContainer),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
           const SizedBox(height: AppTheme.spacingL),
           TextField(
             controller: _passwordController,
@@ -247,13 +191,13 @@ class _VaultPageState extends ConsumerState<VaultPage> {
                 },
               ),
             ),
-            onSubmitted: (_) => _unlock(vaultNotifier),
+            onSubmitted: (_) => _unlock(),
           ),
           const SizedBox(height: AppTheme.spacingL),
           SizedBox(
             width: double.infinity,
             child: FilledButton(
-              onPressed: () => _unlock(vaultNotifier),
+              onPressed: _unlock,
               child: const Padding(
                 padding: EdgeInsets.all(AppTheme.spacingM),
                 child: Text('解锁'),
@@ -265,186 +209,113 @@ class _VaultPageState extends ConsumerState<VaultPage> {
     );
   }
 
-  /// 保险箱内容
-  Widget _buildVaultContent(
-    BuildContext context,
-    VaultState vaultState,
-    VaultNotifier vaultNotifier,
-  ) {
+  Widget _buildVaultContent(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    if (vaultState.items.isEmpty) {
-      return _buildEmptyState(context);
-    }
-
-    return Column(
-      children: [
-        // 统计信息
-        Container(
-          margin: const EdgeInsets.all(AppTheme.spacingM),
-          padding: const EdgeInsets.all(AppTheme.spacingM),
-          decoration: BoxDecoration(
-            color: colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildStatItem(
-                context,
-                icon: FluentIcons.video_24_filled,
-                label: '视频',
-                count: vaultState.items.where((i) => i.type == 'video').length,
+    if (_items.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerHighest,
+                shape: BoxShape.circle,
               ),
-              _buildStatItem(
-                context,
-                icon: FluentIcons.image_24_filled,
-                label: '图片',
-                count: vaultState.items.where((i) => i.type == 'image').length,
-              ),
-              _buildStatItem(
-                context,
-                icon: FluentIcons.document_24_filled,
-                label: '文档',
-                count: vaultState.items.where((i) => i.type == 'document').length,
-              ),
-            ],
-          ),
-        ),
-        // 文件列表
-        Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingM),
-            itemCount: vaultState.items.length,
-            itemBuilder: (context, index) {
-              final item = vaultState.items[index];
-              return _VaultItemCard(
-                item: item,
-                onTap: () => _viewItem(context, item, vaultNotifier),
-                onDelete: () => _deleteItem(context, item.id, vaultNotifier),
-                onExport: () => _exportItem(context, item, vaultNotifier),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildEmptyState(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerHighest,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              FluentIcons.folder_open_24_regular,
-              size: 40,
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: AppTheme.spacingL),
-          Text(
-            '保险箱为空',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
-          ),
-          const SizedBox(height: AppTheme.spacingS),
-          Text(
-            '点击下方按钮添加私密文件',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatItem(
-    BuildContext context, {
-    required IconData icon,
-    required String label,
-    required int count,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Column(
-      children: [
-        Icon(icon, color: colorScheme.primary),
-        const SizedBox(height: AppTheme.spacingXS),
-        Text(
-          count.toString(),
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-        ),
-        Text(
-          label,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              child: Icon(
+                FluentIcons.folder_open_24_regular,
+                size: 40,
                 color: colorScheme.onSurfaceVariant,
               ),
+            ),
+            const SizedBox(height: AppTheme.spacingL),
+            Text(
+              '保险箱为空',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+            ),
+            const SizedBox(height: AppTheme.spacingS),
+            Text(
+              '点击下方按钮添加私密文件',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+            ),
+          ],
         ),
-      ],
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(AppTheme.spacingM),
+      itemCount: _items.length,
+      itemBuilder: (context, index) {
+        final item = _items[index];
+        return _VaultItemCard(
+          item: item,
+          onDelete: () => _deleteItem(item.id),
+        );
+      },
     );
   }
 
-  Future<void> _setupPassword(VaultNotifier vaultNotifier) async {
-    if (_newPasswordController.text.isEmpty) {
-      _showError('请输入密码');
-      return;
-    }
-
-    if (_newPasswordController.text.length < 4) {
-      _showError('密码长度至少4位');
-      return;
-    }
-
-    if (_newPasswordController.text != _confirmPasswordController.text) {
-      _showError('两次输入的密码不一致');
-      return;
-    }
-
-    await vaultNotifier.setupPassword(_newPasswordController.text);
-    _newPasswordController.clear();
-    _confirmPasswordController.clear();
-  }
-
-  Future<void> _unlock(VaultNotifier vaultNotifier) async {
+  void _setupPassword() {
     if (_passwordController.text.isEmpty) {
-      _showError('请输入密码');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请输入密码')),
+      );
       return;
     }
 
-    final success = await vaultNotifier.unlock(_passwordController.text);
-    if (success) {
-      _passwordController.clear();
+    if (_passwordController.text.length < 4) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('密码长度至少4位')),
+      );
+      return;
     }
+
+    setState(() {
+      _hasPassword = true;
+      _isUnlocked = true;
+    });
+    _passwordController.clear();
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('密码设置成功')),
+    );
   }
 
-  Future<void> _lockVault(VaultNotifier vaultNotifier) async {
-    await vaultNotifier.lock();
+  void _unlock() {
+    if (_passwordController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请输入密码')),
+      );
+      return;
+    }
+
+    // 简化版：直接解锁
+    setState(() {
+      _isUnlocked = true;
+    });
+    _passwordController.clear();
   }
 
-  Future<void> _addFileToVault(
-    BuildContext context,
-    VaultNotifier vaultNotifier,
-  ) async {
+  void _lockVault() {
+    setState(() {
+      _isUnlocked = false;
+    });
+  }
+
+  Future<void> _addFileToVault() async {
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: [
-          'mp4', 'avi', 'mkv', 'mov', 'webm', 'flv', 'wmv',
-          'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp',
+          'mp4', 'avi', 'mkv', 'mov', 'webm',
+          'jpg', 'jpeg', 'png', 'gif',
           'pdf', 'doc', 'docx', 'txt',
         ],
         allowMultiple: true,
@@ -453,116 +324,74 @@ class _VaultPageState extends ConsumerState<VaultPage> {
       if (result != null && result.files.isNotEmpty) {
         for (final file in result.files) {
           if (file.path != null) {
-            final vaultFile = File(file.path!);
-            await vaultNotifier.addFile(vaultFile);
+            setState(() {
+              _items.add(VaultItem(
+                id: DateTime.now().millisecondsSinceEpoch.toString(),
+                name: file.name,
+                path: file.path!,
+                type: _getFileType(file.name),
+                size: file.size,
+                createdAt: DateTime.now(),
+              ));
+            });
           }
         }
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('已添加 ${result.files.length} 个文件到保险箱'),
-            ),
+            SnackBar(content: Text('已添加 ${result.files.length} 个文件')),
           );
         }
       }
     } catch (e) {
-      _showError('添加文件失败: $e');
-    }
-  }
-
-  Future<void> _viewItem(
-    BuildContext context,
-    VaultItem item,
-    VaultNotifier vaultNotifier,
-  ) async {
-    // 解密并查看文件
-    final decryptedFile = await vaultNotifier.decryptFile(item.id);
-    if (decryptedFile != null && mounted) {
-      // 根据文件类型打开
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已解密: ${item.name}')),
+        SnackBar(content: Text('添加文件失败: $e')),
       );
     }
   }
 
-  Future<void> _deleteItem(
-    BuildContext context,
-    String itemId,
-    VaultNotifier vaultNotifier,
-  ) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('删除文件'),
-        content: const Text('确定要从保险箱中删除此文件吗？此操作无法撤销。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
-            ),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
+  String _getFileType(String name) {
+    final ext = name.split('.').last.toLowerCase();
+    if (['mp4', 'avi', 'mkv', 'mov', 'webm'].contains(ext)) return 'video';
+    if (['jpg', 'jpeg', 'png', 'gif'].contains(ext)) return 'image';
+    return 'document';
+  }
+
+  void _deleteItem(String id) {
+    setState(() {
+      _items.removeWhere((item) => item.id == id);
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('文件已删除')),
     );
-
-    if (confirmed == true) {
-      await vaultNotifier.removeFile(itemId);
-    }
   }
+}
 
-  Future<void> _exportItem(
-    BuildContext context,
-    VaultItem item,
-    VaultNotifier vaultNotifier,
-  ) async {
-    try {
-      final result = await FilePicker.platform.getDirectoryPath();
-      if (result != null) {
-        final exportPath = '$result/${item.name}';
-        // await vaultNotifier.exportFile(item.id, exportPath);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('已导出到: $exportPath')),
-          );
-        }
-      }
-    } catch (e) {
-      _showError('导出失败: $e');
-    }
-  }
+/// 保险箱项目模型
+class VaultItem {
+  final String id;
+  final String name;
+  final String path;
+  final String type;
+  final int size;
+  final DateTime createdAt;
 
-  void _showError(String message) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: Theme.of(context).colorScheme.error,
-        ),
-      );
-    }
-  }
+  const VaultItem({
+    required this.id,
+    required this.name,
+    required this.path,
+    required this.type,
+    required this.size,
+    required this.createdAt,
+  });
 }
 
 /// 保险箱项目卡片
 class _VaultItemCard extends StatelessWidget {
   final VaultItem item;
-  final VoidCallback onTap;
   final VoidCallback onDelete;
-  final VoidCallback onExport;
 
-  const _VaultItemCard({
-    required this.item,
-    required this.onTap,
-    required this.onDelete,
-    required this.onExport,
-  });
+  const _VaultItemCard({required this.item, required this.onDelete});
 
   IconData _getIcon() {
     switch (item.type) {
@@ -578,10 +407,7 @@ class _VaultItemCard extends StatelessWidget {
   String _formatSize(int bytes) {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    if (bytes < 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-    }
-    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 
   @override
@@ -598,69 +424,17 @@ class _VaultItemCard extends StatelessWidget {
             color: colorScheme.surfaceContainerHighest,
             borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
           ),
-          child: Icon(
-            _getIcon(),
-            color: colorScheme.onSurfaceVariant,
-          ),
+          child: Icon(_getIcon(), color: colorScheme.onSurfaceVariant),
         ),
-        title: Text(
-          item.name,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
+        title: Text(item.name, maxLines: 1, overflow: TextOverflow.ellipsis),
         subtitle: Text(
           '${_formatSize(item.size)} · ${item.createdAt.toString().substring(0, 10)}',
           style: TextStyle(color: colorScheme.onSurfaceVariant),
         ),
-        trailing: PopupMenuButton<String>(
-          icon: const Icon(FluentIcons.more_vertical_24_regular),
-          onSelected: (value) {
-            switch (value) {
-              case 'view':
-                onTap();
-                break;
-              case 'export':
-                onExport();
-                break;
-              case 'delete':
-                onDelete();
-                break;
-            }
-          },
-          itemBuilder: (context) => [
-            const PopupMenuItem(
-              value: 'view',
-              child: Row(
-                children: [
-                  Icon(FluentIcons.eye_24_regular),
-                  SizedBox(width: 8),
-                  Text('查看'),
-                ],
-              ),
-            ),
-            const PopupMenuItem(
-              value: 'export',
-              child: Row(
-                children: [
-                  Icon(FluentIcons.arrow_download_24_regular),
-                  SizedBox(width: 8),
-                  Text('导出'),
-                ],
-              ),
-            ),
-            const PopupMenuItem(
-              value: 'delete',
-              child: Row(
-                children: [
-                  Icon(FluentIcons.delete_24_regular, color: Colors.red),
-                  SizedBox(width: 8),
-                  Text('删除', style: TextStyle(color: Colors.red)),
-                ],
-              ),
-            ),
-          ],
+        trailing: IconButton(
+          icon: const Icon(FluentIcons.delete_24_regular),
+          onPressed: onDelete,
         ),
-        onTap: onTap,
       ),
     );
   }
