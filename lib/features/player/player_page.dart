@@ -6,6 +6,7 @@ import 'package:video_player/video_player.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:path/path.dart' as p;
 import '../../core/theme/app_theme.dart';
 import '../../core/services/settings_service.dart';
 
@@ -24,6 +25,7 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
   double _speed = 1.0, _volume = 1.0;
   String _aspect = 'fit';
   bool _muted = false;
+  bool _landscape = false;
   
   // 双字幕
   SubtitleTrack _sub1 = SubtitleTrack(), _sub2 = SubtitleTrack();
@@ -49,23 +51,60 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
         ? VideoPlayerController.networkUrl(Uri.parse(widget.videoPath)) 
         : VideoPlayerController.file(File(widget.videoPath));
     await _vc.initialize();
+    
     if (s.rememberPosition && widget.videoId != null) {
       final p = s.getPlayPosition(widget.videoId!);
       if (p != null && p > 0) await _vc.seekTo(Duration(milliseconds: p));
     }
+    
     await _vc.setPlaybackSpeed(_speed);
     await _vc.setVolume(_volume);
     _vc.addListener(() { if (_vc.value.position >= _vc.value.duration && _loop && !_prepLoop) _doLoop(); });
     _startProg();
     if (_loop) _startLoop();
     if (s.rememberPosition) _startPos();
+    
+    // 自动加载同名字幕
+    await _autoLoadSubtitles();
+    
     setState(() => _init = true);
-    _vc.play(); setState(() => _playing = true);
+    _vc.play(); 
+    setState(() => _playing = true);
     _startHide();
   }
 
+  /// 自动加载同名字幕
+  Future<void> _autoLoadSubtitles() async {
+    if (widget.videoPath.startsWith('http')) return;
+    
+    try {
+      final videoFile = File(widget.videoPath);
+      final dir = videoFile.parent;
+      final baseName = p.basenameWithoutExtension(widget.videoPath);
+      
+      // 查找同名字幕文件
+      final extensions = ['.srt', '.ass', '.ssa', '.vtt'];
+      for (final ext in extensions) {
+        final subFile = File('${dir.path}/$baseName$ext');
+        if (await subFile.exists()) {
+          final content = await subFile.readAsString();
+          final subs = _parseSrt(content);
+          if (subs.isNotEmpty) {
+            setState(() {
+              _sub1 = SubtitleTrack(subtitles: subs, path: subFile.path);
+              _showSub1 = true;
+            });
+            break;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('自动加载字幕失败: $e');
+    }
+  }
+
   void _startProg() { _progTimer?.cancel(); _progTimer = Timer.periodic(const Duration(milliseconds: 100), (_) { if (mounted) setState(() {}); }); }
-  void _startHide() { _hideTimer?.cancel(); _hideTimer = Timer(const Duration(seconds: 5), () { if (mounted && _playing) setState(() => _showCtrl = false); }); }
+  void _startHide() { _hideTimer?.cancel(); _hideTimer = Timer(const Duration(seconds: 5), () { if (mounted && _playing && !_locked) setState(() => _showCtrl = false); }); }
   void _startLoop() { _loopTimer?.cancel(); _loopTimer = Timer.periodic(const Duration(milliseconds: 50), (_) { if (!mounted || !_loop || !_vc.value.isPlaying) return; final rem = _vc.value.duration.inMilliseconds - _vc.value.position.inMilliseconds; if (rem < _preload && rem > 0 && !_prepLoop) _doLoop(); }); }
   void _startPos() { _posTimer?.cancel(); _posTimer = Timer.periodic(const Duration(seconds: 2), (_) { if (!mounted || widget.videoId == null) return; context.read<SettingsService>().savePlayPosition(widget.videoId!, _vc.value.position.inMilliseconds); }); }
   
@@ -84,8 +123,8 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
         final c = await f.readAsString();
         final subs = _parseSrt(c);
         setState(() {
-          if (idx == 1) { _sub1 = _sub1.copyWith(subtitles: subs, path: r.files.first.path); _showSub1 = true; }
-          else { _sub2 = _sub2.copyWith(subtitles: subs, path: r.files.first.path); _showSub2 = true; }
+          if (idx == 1) { _sub1 = SubtitleTrack(subtitles: subs, path: r.files.first.path); _showSub1 = true; }
+          else { _sub2 = SubtitleTrack(subtitles: subs, path: r.files.first.path); _showSub2 = true; }
         });
       }
     } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('加载失败: $e'))); }
@@ -116,7 +155,13 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
   String _fmt(Duration d) { final h = d.inHours, m = d.inMinutes.remainder(60), s = d.inSeconds.remainder(60); return h > 0 ? '${h.toString().padLeft(2,'0')}:${m.toString().padLeft(2,'0')}:${s.toString().padLeft(2,'0')}' : '${m.toString().padLeft(2,'0')}:${s.toString().padLeft(2,'0')}'; }
 
   @override
-  void dispose() { _sleepTimer?.cancel(); _hideTimer?.cancel(); _loopTimer?.cancel(); _posTimer?.cancel(); _progTimer?.cancel(); _vc.dispose(); SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge); SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp, DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]); super.dispose(); }
+  void dispose() { 
+    _sleepTimer?.cancel(); _hideTimer?.cancel(); _loopTimer?.cancel(); _posTimer?.cancel(); _progTimer?.cancel(); 
+    _vc.dispose(); 
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge); 
+    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp, DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]); 
+    super.dispose(); 
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -155,7 +200,13 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
   Widget _buildGesture() {
     return Positioned.fill(child: GestureDetector(
       behavior: HitTestBehavior.translucent,
-      onTap: () { if (_locked) setState(() => _locked = false); else { setState(() => _showCtrl = !_showCtrl); if (_showCtrl) _startHide(); } },
+      onTap: () { 
+        if (_locked) { setState(() => _locked = false); }
+        else { 
+          setState(() => _showCtrl = !_showCtrl); 
+          if (_showCtrl) _startHide(); 
+        } 
+      },
       onDoubleTap: () { if (!_locked) _togglePlay(); },
       onHorizontalDragStart: (_) { if (!_locked) setState(() { _seeking = true; _seekDelta = 0; }); },
       onHorizontalDragUpdate: (d) { if (!_locked && _seeking) setState(() { _seekDelta += d.primaryDelta! / MediaQuery.of(context).size.width * 60000; }); },
@@ -169,8 +220,16 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
   Widget _buildCtrl(ColorScheme cs) {
     return Positioned.fill(child: Container(
       decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.black.withOpacity(0.5), Colors.transparent, Colors.transparent, Colors.black.withOpacity(0.5)], stops: const [0, 0.2, 0.8, 1])),
-      child: Column(children: [_buildTop(cs), const Spacer(), if (_seeking) Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(8)), child: Text('${_seekDelta > 0 ? '+' : ''}${(_seekDelta / 1000).toStringAsFixed(1)}秒', style: const TextStyle(color: Colors.white, fontSize: 16))), if (_volAdj) Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(8)), child: Text('音量 ${(_volume * 100).toInt()}%', style: const TextStyle(color: Colors.white, fontSize: 16))), if (!_seeking && !_volAdj) _buildCenter(cs), const Spacer(), _buildBottom(cs)],
-    )));
+      child: Column(children: [
+        _buildTop(cs),
+        const Spacer(),
+        // 手势指示器
+        if (_seeking) Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(8)), child: Text('${_seekDelta > 0 ? '+' : ''}${(_seekDelta / 1000).toStringAsFixed(1)}秒', style: const TextStyle(color: Colors.white, fontSize: 16))),
+        if (_volAdj) Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(8)), child: Text('音量 ${(_volume * 100).toInt()}%', style: const TextStyle(color: Colors.white, fontSize: 16))),
+        const Spacer(),
+        _buildBottom(cs)
+      ]),
+    ));
   }
 
   Widget _buildTop(ColorScheme cs) {
@@ -179,23 +238,14 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(widget.videoName, style: const TextStyle(color: Colors.white, fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis), if (_sleepMin != null) Text('睡眠: $_sleepMin分钟', style: TextStyle(color: cs.primary, fontSize: 10))])),
       Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: _loop ? cs.primary : Colors.white24, borderRadius: BorderRadius.circular(10)), child: Text(_loop ? '循环' : '单次', style: const TextStyle(color: Colors.white, fontSize: 10))),
       IconButton(icon: Icon(_locked ? FluentIcons.lock_closed_24_filled : FluentIcons.lock_open_24_regular, color: Colors.white, size: 18), onPressed: () => setState(() => _locked = !_locked)),
-      IconButton(icon: const Icon(FluentIcons.settings_24_regular, color: Colors.white, size: 18), onPressed: () => _showSettings()),
+      IconButton(icon: const Icon(FluentIcons.settings_24_regular, color: Colors.white, size: 18), onPressed: _showSettings),
     ])));
-  }
-
-  Widget _buildCenter(ColorScheme cs) {
-    return Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-      IconButton(icon: const Icon(FluentIcons.rewind_24_filled, color: Colors.white, size: 22), onPressed: () => _vc.seekTo(_vc.value.position - const Duration(seconds: 10))),
-      const SizedBox(width: 20),
-      GestureDetector(onTap: _togglePlay, child: Container(width: 48, height: 48, decoration: BoxDecoration(color: cs.primary, shape: BoxShape.circle), child: Icon(_playing ? FluentIcons.pause_24_filled : FluentIcons.play_24_filled, color: Colors.white, size: 24))),
-      const SizedBox(width: 20),
-      IconButton(icon: const Icon(FluentIcons.fast_forward_24_filled, color: Colors.white, size: 22), onPressed: () => _vc.seekTo(_vc.value.position + const Duration(seconds: 10))),
-    ]);
   }
 
   Widget _buildBottom(ColorScheme cs) {
     final pos = _vc.value.position, dur = _vc.value.duration;
     return SafeArea(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), child: Column(mainAxisSize: MainAxisSize.min, children: [
+      // 进度条
       Row(children: [
         Text(_fmt(pos), style: const TextStyle(color: Colors.white, fontSize: 10)),
         Expanded(child: Slider(value: dur.inMilliseconds > 0 ? pos.inMilliseconds.toDouble().clamp(0, dur.inMilliseconds.toDouble()) : 0, min: 0, max: dur.inMilliseconds > 0 ? dur.inMilliseconds.toDouble() : 1, onChanged: (v) => _vc.seekTo(Duration(milliseconds: v.toInt())), activeColor: cs.primary, inactiveColor: Colors.white24, thumbColor: Colors.white)),
@@ -203,20 +253,58 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
         const SizedBox(width: 6),
         Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(8)), child: Text('${_speed}x', style: const TextStyle(color: Colors.white, fontSize: 9))),
       ]),
+      const SizedBox(height: 4),
+      // 控制按钮 - 更清晰的图标
       Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-        IconButton(icon: Icon(_muted ? FluentIcons.speaker_mute_24_filled : FluentIcons.speaker_2_24_filled, color: Colors.white, size: 18), onPressed: () { setState(() { _muted = !_muted; _vc.setVolume(_muted ? 0 : _volume); }); }),
-        IconButton(icon: Icon(_sub1.subtitles.isNotEmpty ? (_showSub1 ? FluentIcons.closed_caption_24_filled : FluentIcons.closed_caption_24_regular) : FluentIcons.closed_caption_off_24_regular, color: Colors.white, size: 18), onPressed: () { if (_sub1.subtitles.isNotEmpty) setState(() => _showSub1 = !_showSub1); else _loadSub(1); }),
-        IconButton(icon: Icon(_sub2.subtitles.isNotEmpty ? (_showSub2 ? FluentIcons.closed_caption_24_filled : FluentIcons.closed_caption_24_regular) : FluentIcons.closed_caption_off_24_regular, color: Colors.white38, size: 18), onPressed: () { if (_sub2.subtitles.isNotEmpty) setState(() => _showSub2 = !_showSub2); else _loadSub(2); }),
-        IconButton(icon: const Icon(FluentIcons.full_screen_maximize_24_regular, color: Colors.white, size: 18), onPressed: _showAspect),
-        IconButton(icon: const Icon(FluentIcons.full_screen_maximize_24_regular, color: Colors.white, size: 18), onPressed: _toggleFS),
+        // 音量
+        _ctrlBtn(icon: _muted ? FluentIcons.speaker_mute_24_filled : FluentIcons.speaker_2_24_filled, label: '音量', onTap: () { setState(() { _muted = !_muted; _vc.setVolume(_muted ? 0 : _volume); }); }),
+        // 字幕1
+        _ctrlBtn(icon: FluentIcons.closed_caption_24_regular, label: '字幕1', active: _showSub1 && _sub1.subtitles.isNotEmpty, onTap: () { if (_sub1.subtitles.isNotEmpty) setState(() => _showSub1 = !_showSub1); else _loadSub(1); }),
+        // 字幕2
+        _ctrlBtn(icon: FluentIcons.closed_caption_24_regular, label: '字幕2', active: _showSub2 && _sub2.subtitles.isNotEmpty, dim: true, onTap: () { if (_sub2.subtitles.isNotEmpty) setState(() => _showSub2 = !_showSub2); else _loadSub(2); }),
+        // 画面比例
+        _ctrlBtn(icon: FluentIcons.full_screen_maximize_24_regular, label: '比例', onTap: _showAspect),
+        // 旋转屏幕
+        _ctrlBtn(icon: _landscape ? FluentIcons.phone_24_regular : FluentIcons.phone_tablet_24_regular, label: '旋转', onTap: _toggleRotation),
       ]),
     ])));
+  }
+
+  Widget _ctrlBtn({required IconData icon, required String label, bool active = false, bool dim = false, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: active ? Theme.of(context).colorScheme.primary.withOpacity(0.3) : Colors.white10,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: dim ? Colors.white38 : Colors.white, size: 18),
+            const SizedBox(height: 2),
+            Text(label, style: TextStyle(color: dim ? Colors.white38 : Colors.white70, fontSize: 9)),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildLock() => Center(child: GestureDetector(onTap: () => setState(() => _locked = false), child: Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(10)), child: const Icon(FluentIcons.lock_closed_24_filled, color: Colors.white, size: 28))));
 
   void _togglePlay() { if (_playing) _vc.pause(); else _vc.play(); setState(() => _playing = !_playing); _startHide(); }
-  void _toggleFS() { if (MediaQuery.of(context).orientation == Orientation.portrait) { SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky); SystemChrome.setPreferredOrientations([DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]); } else { SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge); SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]); } }
+  
+  void _toggleRotation() {
+    setState(() => _landscape = !_landscape);
+    if (_landscape) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      SystemChrome.setPreferredOrientations([DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
+    } else {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+    }
+  }
   
   void _showAspect() => showDialog(context: context, builder: (c) => SimpleDialog(title: const Text('画面比例'), children: ['fit', 'fill', '16:9', '4:3'].map((a) => RadioListTile(title: Text({'fit': '自适应', 'fill': '填充', '16:9': '16:9', '4:3': '4:3'}[a]!), value: a, groupValue: _aspect, onChanged: (v) { setState(() => _aspect = v!); Navigator.pop(c); })).toList()));
 
