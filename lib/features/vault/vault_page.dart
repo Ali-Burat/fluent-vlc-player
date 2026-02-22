@@ -387,7 +387,7 @@ class _VaultPageState extends State<VaultPage> {
               value: 'restore',
               child: Row(
                 children: [
-                  Icon(FluentIcons.arrow_restore_24_regular),
+                  Icon(FluentIcons.arrow_undo_24_regular),
                   SizedBox(width: 8),
                   Text('还原到原位置'),
                 ],
