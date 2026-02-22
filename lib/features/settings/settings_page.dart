@@ -457,7 +457,7 @@ class SettingsPage extends StatelessWidget {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _buildThemeModeOption(context, settings, ThemeMode.system, '跟随系统', FluentIcons.brightness_auto_24_regular),
+            _buildThemeModeOption(context, settings, ThemeMode.system, '跟随系统', FluentIcons.weather_sunny_24_regular),
             _buildThemeModeOption(context, settings, ThemeMode.light, '浅色模式', FluentIcons.weather_sunny_24_regular),
             _buildThemeModeOption(context, settings, ThemeMode.dark, '深色模式', FluentIcons.weather_moon_24_regular),
           ],
