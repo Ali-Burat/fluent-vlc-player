@@ -73,16 +73,12 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
     _startHide();
   }
 
-  /// 自动加载同名字幕
   Future<void> _autoLoadSubtitles() async {
     if (widget.videoPath.startsWith('http')) return;
-    
     try {
       final videoFile = File(widget.videoPath);
       final dir = videoFile.parent;
       final baseName = p.basenameWithoutExtension(widget.videoPath);
-      
-      // 查找同名字幕文件
       final extensions = ['.srt', '.ass', '.ssa', '.vtt'];
       for (final ext in extensions) {
         final subFile = File('${dir.path}/$baseName$ext');
@@ -90,17 +86,12 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
           final content = await subFile.readAsString();
           final subs = _parseSrt(content);
           if (subs.isNotEmpty) {
-            setState(() {
-              _sub1 = SubtitleTrack(subtitles: subs, path: subFile.path);
-              _showSub1 = true;
-            });
+            setState(() { _sub1 = SubtitleTrack(subtitles: subs, path: subFile.path); _showSub1 = true; });
             break;
           }
         }
       }
-    } catch (e) {
-      debugPrint('自动加载字幕失败: $e');
-    }
+    } catch (e) { debugPrint('自动加载字幕失败: $e'); }
   }
 
   void _startProg() { _progTimer?.cancel(); _progTimer = Timer.periodic(const Duration(milliseconds: 100), (_) { if (mounted) setState(() {}); }); }
@@ -219,13 +210,13 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
 
   Widget _buildCtrl(ColorScheme cs) {
     return Positioned.fill(child: Container(
-      decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.black.withOpacity(0.5), Colors.transparent, Colors.transparent, Colors.black.withOpacity(0.5)], stops: const [0, 0.2, 0.8, 1])),
+      decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.black.withOpacity(0.6), Colors.transparent, Colors.transparent, Colors.black.withOpacity(0.7)], stops: const [0, 0.15, 0.7, 1])),
       child: Column(children: [
         _buildTop(cs),
         const Spacer(),
         // 手势指示器
-        if (_seeking) Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(8)), child: Text('${_seekDelta > 0 ? '+' : ''}${(_seekDelta / 1000).toStringAsFixed(1)}秒', style: const TextStyle(color: Colors.white, fontSize: 16))),
-        if (_volAdj) Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(8)), child: Text('音量 ${(_volume * 100).toInt()}%', style: const TextStyle(color: Colors.white, fontSize: 16))),
+        if (_seeking) Center(child: Container(padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12), decoration: BoxDecoration(color: Colors.black.withOpacity(0.7), borderRadius: BorderRadius.circular(8)), child: Text('${_seekDelta > 0 ? '+' : ''}${(_seekDelta / 1000).toStringAsFixed(1)}秒', style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w500)))),
+        if (_volAdj) Center(child: Container(padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12), decoration: BoxDecoration(color: Colors.black.withOpacity(0.7), borderRadius: BorderRadius.circular(8)), child: Text('音量 ${(_volume * 100).toInt()}%', style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w500)))),
         const Spacer(),
         _buildBottom(cs)
       ]),
@@ -233,65 +224,148 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
   }
 
   Widget _buildTop(ColorScheme cs) {
-    return SafeArea(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), child: Row(children: [
-      IconButton(icon: const Icon(Icons.arrow_back, color: Colors.white, size: 20), onPressed: () => Navigator.pop(context)),
-      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(widget.videoName, style: const TextStyle(color: Colors.white, fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis), if (_sleepMin != null) Text('睡眠: $_sleepMin分钟', style: TextStyle(color: cs.primary, fontSize: 10))])),
-      Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: _loop ? cs.primary : Colors.white24, borderRadius: BorderRadius.circular(10)), child: Text(_loop ? '循环' : '单次', style: const TextStyle(color: Colors.white, fontSize: 10))),
-      IconButton(icon: Icon(_locked ? FluentIcons.lock_closed_24_filled : FluentIcons.lock_open_24_regular, color: Colors.white, size: 18), onPressed: () => setState(() => _locked = !_locked)),
-      IconButton(icon: const Icon(FluentIcons.settings_24_regular, color: Colors.white, size: 18), onPressed: _showSettings),
-    ])));
+    return SafeArea(child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Row(children: [
+        // 返回
+        IconButton(icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 22), onPressed: () => Navigator.pop(context)),
+        // 标题
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(widget.videoName, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis),
+          if (_sleepMin != null) Text('睡眠: $_sleepMin分钟', style: TextStyle(color: cs.primary, fontSize: 11)),
+        ])),
+        // 循环状态
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(color: _loop ? cs.primary : Colors.white24, borderRadius: BorderRadius.circular(16)),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(FluentIcons.arrow_sync_24_filled, color: Colors.white, size: 14),
+            const SizedBox(width: 4),
+            Text(_loop ? '循环' : '单次', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500)),
+          ]),
+        ),
+        const SizedBox(width: 8),
+        // 锁定
+        IconButton(icon: Icon(_locked ? FluentIcons.lock_closed_24_filled : FluentIcons.lock_open_24_regular, color: Colors.white, size: 22), onPressed: () => setState(() => _locked = !_locked)),
+        // 设置
+        IconButton(icon: const Icon(FluentIcons.options_24_regular, color: Colors.white, size: 22), onPressed: _showSettings),
+      ]),
+    ));
   }
 
   Widget _buildBottom(ColorScheme cs) {
     final pos = _vc.value.position, dur = _vc.value.duration;
-    return SafeArea(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), child: Column(mainAxisSize: MainAxisSize.min, children: [
-      // 进度条
-      Row(children: [
-        Text(_fmt(pos), style: const TextStyle(color: Colors.white, fontSize: 10)),
-        Expanded(child: Slider(value: dur.inMilliseconds > 0 ? pos.inMilliseconds.toDouble().clamp(0, dur.inMilliseconds.toDouble()) : 0, min: 0, max: dur.inMilliseconds > 0 ? dur.inMilliseconds.toDouble() : 1, onChanged: (v) => _vc.seekTo(Duration(milliseconds: v.toInt())), activeColor: cs.primary, inactiveColor: Colors.white24, thumbColor: Colors.white)),
-        Text(_fmt(dur), style: const TextStyle(color: Colors.white, fontSize: 10)),
-        const SizedBox(width: 6),
-        Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(8)), child: Text('${_speed}x', style: const TextStyle(color: Colors.white, fontSize: 9))),
+    
+    return SafeArea(child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        // 进度条
+        Row(children: [
+          Text(_fmt(pos), style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: SliderTheme(
+              data: SliderThemeData(
+                trackHeight: 3,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+              ),
+              child: Slider(
+                value: dur.inMilliseconds > 0 ? pos.inMilliseconds.toDouble().clamp(0, dur.inMilliseconds.toDouble()) : 0,
+                min: 0, max: dur.inMilliseconds > 0 ? dur.inMilliseconds.toDouble() : 1,
+                onChanged: (v) => _vc.seekTo(Duration(milliseconds: v.toInt())),
+                activeColor: cs.primary, inactiveColor: Colors.white24, thumbColor: Colors.white,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(_fmt(dur), style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500)),
+        ]),
+        
+        const SizedBox(height: 8),
+        
+        // 控制按钮行
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            // 快退
+            _ctrlBtn(icon: FluentIcons.previous_24_filled, onTap: () => _vc.seekTo(_vc.value.position - const Duration(seconds: 10))),
+            // 字幕1
+            _ctrlBtn(
+              icon: FluentIcons.closed_caption_24_regular,
+              active: _showSub1 && _sub1.subtitles.isNotEmpty,
+              onTap: () { if (_sub1.subtitles.isNotEmpty) setState(() => _showSub1 = !_showSub1); else _loadSub(1); },
+            ),
+            // 播放/暂停
+            GestureDetector(
+              onTap: _togglePlay,
+              child: Container(
+                width: 52, height: 52,
+                decoration: BoxDecoration(color: cs.primary, shape: BoxShape.circle),
+                child: Icon(_playing ? FluentIcons.pause_24_filled : FluentIcons.play_24_filled, color: Colors.white, size: 26),
+              ),
+            ),
+            // 字幕2
+            _ctrlBtn(
+              icon: FluentIcons.closed_caption_24_regular,
+              active: _showSub2 && _sub2.subtitles.isNotEmpty,
+              dim: true,
+              onTap: () { if (_sub2.subtitles.isNotEmpty) setState(() => _showSub2 = !_showSub2); else _loadSub(2); },
+            ),
+            // 快进
+            _ctrlBtn(icon: FluentIcons.next_24_filled, onTap: () => _vc.seekTo(_vc.value.position + const Duration(seconds: 10))),
+          ],
+        ),
+        
+        const SizedBox(height: 8),
+        
+        // 底部功能按钮
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            // 音量
+            _smallBtn(icon: _muted ? FluentIcons.speaker_mute_24_regular : FluentIcons.speaker_2_24_regular, label: '音量', onTap: () { setState(() { _muted = !_muted; _vc.setVolume(_muted ? 0 : _volume); }); }),
+            // 速度
+            _smallBtn(label: '${_speed}x', onTap: _showSpeed),
+            // 比例
+            _smallBtn(icon: FluentIcons.full_screen_maximize_24_regular, label: '比例', onTap: _showAspect),
+            // 旋转
+            _smallBtn(icon: FluentIcons.phone_tablet_24_regular, label: '旋转', onTap: _toggleRotation),
+          ],
+        ),
       ]),
-      const SizedBox(height: 4),
-      // 控制按钮 - 更清晰的图标
-      Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-        // 音量
-        _ctrlBtn(icon: _muted ? FluentIcons.speaker_mute_24_filled : FluentIcons.speaker_2_24_filled, label: '音量', onTap: () { setState(() { _muted = !_muted; _vc.setVolume(_muted ? 0 : _volume); }); }),
-        // 字幕1
-        _ctrlBtn(icon: FluentIcons.closed_caption_24_regular, label: '字幕1', active: _showSub1 && _sub1.subtitles.isNotEmpty, onTap: () { if (_sub1.subtitles.isNotEmpty) setState(() => _showSub1 = !_showSub1); else _loadSub(1); }),
-        // 字幕2
-        _ctrlBtn(icon: FluentIcons.closed_caption_24_regular, label: '字幕2', active: _showSub2 && _sub2.subtitles.isNotEmpty, dim: true, onTap: () { if (_sub2.subtitles.isNotEmpty) setState(() => _showSub2 = !_showSub2); else _loadSub(2); }),
-        // 画面比例
-        _ctrlBtn(icon: FluentIcons.full_screen_maximize_24_regular, label: '比例', onTap: _showAspect),
-        // 旋转屏幕
-        _ctrlBtn(icon: _landscape ? FluentIcons.phone_24_regular : FluentIcons.phone_tablet_24_regular, label: '旋转', onTap: _toggleRotation),
-      ]),
-    ])));
+    ));
   }
 
-  Widget _ctrlBtn({required IconData icon, required String label, bool active = false, bool dim = false, required VoidCallback onTap}) {
+  Widget _ctrlBtn({required IconData icon, bool active = false, bool dim = false, required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        width: 44, height: 44,
         decoration: BoxDecoration(
           color: active ? Theme.of(context).colorScheme.primary.withOpacity(0.3) : Colors.white10,
-          borderRadius: BorderRadius.circular(8),
+          shape: BoxShape.circle,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: dim ? Colors.white38 : Colors.white, size: 18),
-            const SizedBox(height: 2),
-            Text(label, style: TextStyle(color: dim ? Colors.white38 : Colors.white70, fontSize: 9)),
-          ],
-        ),
+        child: Icon(icon, color: dim ? Colors.white38 : Colors.white, size: 22),
       ),
     );
   }
 
-  Widget _buildLock() => Center(child: GestureDetector(onTap: () => setState(() => _locked = false), child: Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(10)), child: const Icon(FluentIcons.lock_closed_24_filled, color: Colors.white, size: 28))));
+  Widget _smallBtn({IconData? icon, String? label, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(16)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          if (icon != null) ...[Icon(icon, color: Colors.white70, size: 16), const SizedBox(width: 4)],
+          if (label != null) Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+        ]),
+      ),
+    );
+  }
+
+  Widget _buildLock() => Center(child: GestureDetector(onTap: () => setState(() => _locked = false), child: Container(padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: Colors.black.withOpacity(0.7), borderRadius: BorderRadius.circular(12)), child: const Icon(FluentIcons.lock_closed_24_filled, color: Colors.white, size: 32))));
 
   void _togglePlay() { if (_playing) _vc.pause(); else _vc.play(); setState(() => _playing = !_playing); _startHide(); }
   
@@ -306,27 +380,61 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
     }
   }
   
-  void _showAspect() => showDialog(context: context, builder: (c) => SimpleDialog(title: const Text('画面比例'), children: ['fit', 'fill', '16:9', '4:3'].map((a) => RadioListTile(title: Text({'fit': '自适应', 'fill': '填充', '16:9': '16:9', '4:3': '4:3'}[a]!), value: a, groupValue: _aspect, onChanged: (v) { setState(() => _aspect = v!); Navigator.pop(c); })).toList()));
+  void _showSpeed() {
+    showModalBottomSheet(context: context, backgroundColor: Colors.transparent, builder: (c) => Container(
+      decoration: BoxDecoration(color: Colors.grey[900], borderRadius: const BorderRadius.vertical(top: Radius.circular(20))),
+      padding: const EdgeInsets.all(20),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        const Text('播放速度', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w500)),
+        const SizedBox(height: 16),
+        Wrap(spacing: 10, runSpacing: 10, children: [0.5, 0.75, 1.0, 1.25, 1.5, 2.0].map((s) => ChoiceChip(
+          label: Text('${s}x'), selected: _speed == s, selectedColor: Theme.of(context).colorScheme.primary,
+          onSelected: (_) { _vc.setPlaybackSpeed(s); setState(() => _speed = s); Navigator.pop(c); },
+        )).toList()),
+      ]),
+    ));
+  }
+  
+  void _showAspect() => showDialog(context: context, builder: (c) => SimpleDialog(
+    title: const Text('画面比例'),
+    children: ['fit', 'fill', '16:9', '4:3'].map((a) => RadioListTile(
+      title: Text({'fit': '自适应', 'fill': '填充屏幕', '16:9': '16:9', '4:3': '4:3'}[a]!),
+      value: a, groupValue: _aspect,
+      onChanged: (v) { setState(() => _aspect = v!); Navigator.pop(c); },
+    )).toList(),
+  ));
 
   void _showSettings() {
     showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (c) => StatefulBuilder(builder: (ctx, setSt) => Container(
-      height: MediaQuery.of(ctx).size.height * 0.7,
+      height: MediaQuery.of(ctx).size.height * 0.65,
       decoration: BoxDecoration(color: Colors.grey[900], borderRadius: const BorderRadius.vertical(top: Radius.circular(20))),
       child: ListView(padding: const EdgeInsets.all(16), children: [
         Center(child: Container(width: 32, height: 4, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)))),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
         const Text('设置', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
-        const SizedBox(height: 16),
-        const Text('播放速度', style: TextStyle(color: Colors.white70, fontSize: 12)),
-        const SizedBox(height: 6),
-        Wrap(spacing: 6, children: [0.5, 0.75, 1.0, 1.25, 1.5, 2.0].map((s) => ChoiceChip(label: Text('${s}x'), selected: _speed == s, selectedColor: Theme.of(ctx).colorScheme.primary, onSelected: (_) { _vc.setPlaybackSpeed(s); setState(() => _speed = s); setSt(() {}); })).toList()),
+        const SizedBox(height: 20),
+        
+        // 无感循环
+        SwitchListTile(
+          title: const Text('无感循环', style: TextStyle(color: Colors.white)),
+          subtitle: const Text('循环时无黑屏闪烁', style: TextStyle(color: Colors.white54)),
+          value: _loop, activeColor: Theme.of(ctx).colorScheme.primary,
+          onChanged: (v) { setState(() => _loop = v); setSt(() {}); if (v) _startLoop(); else _loopTimer?.cancel(); },
+        ),
+        
         const SizedBox(height: 12),
-        SwitchListTile(title: const Text('无感循环', style: TextStyle(color: Colors.white)), subtitle: const Text('循环时无黑屏', style: TextStyle(color: Colors.white54)), value: _loop, activeColor: Theme.of(ctx).colorScheme.primary, onChanged: (v) { setState(() => _loop = v); setSt(() {}); if (v) _startLoop(); else _loopTimer?.cancel(); }),
+        
+        // 睡眠定时
+        const Text('睡眠定时', style: TextStyle(color: Colors.white70, fontSize: 13)),
         const SizedBox(height: 8),
-        const Text('睡眠定时', style: TextStyle(color: Colors.white70, fontSize: 12)),
-        const SizedBox(height: 6),
-        Wrap(spacing: 6, children: [{'关闭': null}, {'15分': 15}, {'30分': 30}, {'60分': 60}].map((i) => ChoiceChip(label: Text(i.keys.first), selected: _sleepMin == i.values.first, selectedColor: Theme.of(ctx).colorScheme.primary, onSelected: (_) { _setSleep(i.values.first as int?); setSt(() {}); })).toList()),
-        const SizedBox(height: 16),
+        Wrap(spacing: 8, children: [{'关闭': null}, {'15分': 15}, {'30分': 30}, {'60分': 60}].map((i) => ChoiceChip(
+          label: Text(i.keys.first), selected: _sleepMin == i.values.first, selectedColor: Theme.of(ctx).colorScheme.primary,
+          onSelected: (_) { _setSleep(i.values.first as int?); setSt(() {}); },
+        )).toList()),
+        
+        const SizedBox(height: 20),
+        
+        // 字幕设置
         _subSection(1, _sub1, _showSub1, (t, s) { setState(() { _sub1 = t; _showSub1 = s; }); setSt(() {}); }),
         const SizedBox(height: 12),
         _subSection(2, _sub2, _showSub2, (t, s) { setState(() { _sub2 = t; _showSub2 = s; }); setSt(() {}); }),
@@ -336,17 +444,37 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
 
   Widget _subSection(int idx, SubtitleTrack t, bool show, Function(SubtitleTrack, bool) upd) {
     final cs = Theme.of(context).colorScheme;
-    return Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(10)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [Text('字幕$idx', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500, fontSize: 13)), const Spacer(), if (t.subtitles.isNotEmpty) Switch(value: show, activeColor: cs.primary, onChanged: (v) => upd(t, v)), TextButton(onPressed: () => _loadSub(idx), child: Text(t.subtitles.isEmpty ? '加载' : '更换', style: TextStyle(color: cs.primary, fontSize: 12)))]),
-      if (t.subtitles.isNotEmpty) ...[
-        const SizedBox(height: 8),
-        Row(children: [const Text('位置', style: TextStyle(color: Colors.white54, fontSize: 11)), Expanded(child: Slider(value: t.position, min: 0.1, max: 0.9, activeColor: cs.primary, onChanged: (v) => upd(t.copyWith(position: v), show))), Text(t.position < 0.4 ? '上' : t.position > 0.7 ? '下' : '中', style: const TextStyle(color: Colors.white38, fontSize: 10))]),
-        Row(children: [const Text('大小', style: TextStyle(color: Colors.white54, fontSize: 11)), Expanded(child: Slider(value: t.fontSize, min: 12, max: 24, activeColor: cs.primary, onChanged: (v) => upd(t.copyWith(fontSize: v), show))), Text('${t.fontSize.toInt()}', style: const TextStyle(color: Colors.white38, fontSize: 10))]),
-        const Text('颜色', style: TextStyle(color: Colors.white54, fontSize: 11)),
-        const SizedBox(height: 4),
-        Wrap(spacing: 6, children: [Colors.white, Colors.yellow, Colors.cyan, Colors.green, Colors.pink].map((c) => GestureDetector(onTap: () => upd(t.copyWith(color: c), show), child: Container(width: 24, height: 24, decoration: BoxDecoration(color: c, shape: BoxShape.circle, border: t.color == c ? Border.all(color: cs.primary, width: 2) : null)))).toList()),
-      ],
-    ]));
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(12)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Text('字幕$idx', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+          const Spacer(),
+          if (t.subtitles.isNotEmpty) Switch(value: show, activeColor: cs.primary, onChanged: (v) => upd(t, v)),
+          TextButton(onPressed: () => _loadSub(idx), child: Text(t.subtitles.isEmpty ? '加载' : '更换', style: TextStyle(color: cs.primary))),
+        ]),
+        if (t.subtitles.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Row(children: [
+            const Text('位置', style: TextStyle(color: Colors.white54, fontSize: 12)),
+            Expanded(child: Slider(value: t.position, min: 0.1, max: 0.9, activeColor: cs.primary, onChanged: (v) => upd(t.copyWith(position: v), show))),
+            Text(t.position < 0.4 ? '上' : t.position > 0.7 ? '下' : '中', style: const TextStyle(color: Colors.white38, fontSize: 11)),
+          ]),
+          Row(children: [
+            const Text('大小', style: TextStyle(color: Colors.white54, fontSize: 12)),
+            Expanded(child: Slider(value: t.fontSize, min: 12, max: 24, activeColor: cs.primary, onChanged: (v) => upd(t.copyWith(fontSize: v), show))),
+            Text('${t.fontSize.toInt()}', style: const TextStyle(color: Colors.white38, fontSize: 11)),
+          ]),
+          const Text('颜色', style: TextStyle(color: Colors.white54, fontSize: 12)),
+          const SizedBox(height: 6),
+          Wrap(spacing: 8, children: [Colors.white, Colors.yellow, Colors.cyan, Colors.green, Colors.pink].map((c) => GestureDetector(
+            onTap: () => upd(t.copyWith(color: c), show),
+            child: Container(width: 26, height: 26, decoration: BoxDecoration(color: c, shape: BoxShape.circle, border: t.color == c ? Border.all(color: cs.primary, width: 2) : null)),
+          )).toList()),
+        ],
+      ]),
+    );
   }
 }
 
