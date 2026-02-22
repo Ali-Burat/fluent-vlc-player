@@ -7,7 +7,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
-import 'package:video_thumbnail/video_thumbnail.dart';
+import 'package:screen_brightness/screen_brightness.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/services/settings_service.dart';
 
@@ -42,7 +42,7 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
   SubtitleTrack _sub1 = SubtitleTrack(), _sub2 = SubtitleTrack();
   bool _showSub1 = true, _showSub2 = false;
   
-  // 手势 - 只在调整时显示
+  // 手势 - 音量/亮度调整时显示
   bool _seeking = false, _volAdj = false, _brightAdj = false;
   double _seekDelta = 0;
   double _gestureStartY = 0;
@@ -55,10 +55,26 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
   
   // 选集菜单
   bool _showPlaylist = false;
-  String? _thumbnailPath;
+  
+  // 屏幕亮度
+  final ScreenBrightness _screenBrightness = ScreenBrightness();
+  double _currentBrightness = 0.5;
 
   @override
-  void initState() { super.initState(); _initPlayer(); }
+  void initState() { 
+    super.initState(); 
+    _initBrightness();
+    _initPlayer(); 
+  }
+  
+  Future<void> _initBrightness() async {
+    try {
+      _currentBrightness = await _screenBrightness.current;
+      setState(() => _brightness = _currentBrightness);
+    } catch (e) {
+      debugPrint('获取亮度失败: $e');
+    }
+  }
 
   Future<void> _initPlayer() async {
     final s = context.read<SettingsService>();
@@ -80,7 +96,6 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
     if (_loop) _startLoop();
     if (s.rememberPosition) _startPos();
     
-    // 自动加载相似字幕
     await _autoLoadSubtitles();
     
     setState(() => _init = true);
@@ -89,7 +104,6 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
     _startHide();
   }
 
-  /// 自动加载相似名称的字幕文件
   Future<void> _autoLoadSubtitles() async {
     if (widget.videoPath.startsWith('http')) return;
     try {
@@ -105,9 +119,7 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
           final fileName = p.basenameWithoutExtension(entity.path).toLowerCase();
           final ext = p.extension(entity.path).toLowerCase();
           
-          // 检查是否是字幕文件
           if (extensions.contains(ext)) {
-            // 检查文件名是否相似（包含视频文件名或视频文件名包含字幕文件名）
             if (fileName.contains(baseName) || baseName.contains(fileName) || 
                 _calculateSimilarity(fileName, baseName) > 0.6) {
               matchedSubs.add(entity);
@@ -116,7 +128,6 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
         }
       }
       
-      // 加载找到的字幕
       if (matchedSubs.isNotEmpty) {
         final content1 = await matchedSubs[0].readAsString();
         final subs1 = _parseSrt(content1);
@@ -141,21 +152,15 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
     } catch (e) { debugPrint('自动加载字幕失败: $e'); }
   }
   
-  /// 计算字符串相似度
   double _calculateSimilarity(String s1, String s2) {
     if (s1 == s2) return 1.0;
     if (s1.isEmpty || s2.isEmpty) return 0.0;
-    
     int matches = 0;
     final shorter = s1.length < s2.length ? s1 : s2;
     final longer = s1.length < s2.length ? s2 : s1;
-    
     for (int i = 0; i < shorter.length; i++) {
-      if (longer.contains(shorter.substring(i, i + 1))) {
-        matches++;
-      }
+      if (longer.contains(shorter.substring(i, i + 1))) matches++;
     }
-    
     return matches / longer.length;
   }
 
@@ -214,6 +219,7 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
   void dispose() { 
     _sleepTimer?.cancel(); _hideTimer?.cancel(); _loopTimer?.cancel(); _posTimer?.cancel(); _progTimer?.cancel(); 
     _vc.dispose(); 
+    _screenBrightness.resetScreenBrightness();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge); 
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp, DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]); 
     super.dispose(); 
@@ -225,17 +231,11 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
     return Scaffold(
       backgroundColor: Colors.black, 
       body: Stack(children: [
-        // 视频
         Center(child: _init ? _buildVideo() : const CircularProgressIndicator(strokeWidth: 2)),
-        // 字幕
         if (_init) _buildSubs(),
-        // 手势层
         if (_init) _buildGesture(),
-        // 控件
         if (_init && _showCtrl && !_locked) _buildControls(cs),
-        // 锁定
         if (_locked) _buildLock(),
-        // 选集菜单
         if (_showPlaylist && widget.playlist != null) _buildPlaylistMenu(cs),
       ]),
     );
@@ -260,41 +260,21 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
     ]);
   }
 
-  /// 字幕显示 - 背景只包裹内容
   Widget _subText(SubtitleTrack t, Duration pos) {
     String? txt; 
-    for (final e in t.subtitles) { 
-      if (pos >= e.start && pos <= e.end) { 
-        txt = e.text; 
-        break; 
-      } 
-    }
+    for (final e in t.subtitles) { if (pos >= e.start && pos <= e.end) { txt = e.text; break; } }
     if (txt == null) return const SizedBox.shrink();
     
     return Center(child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: t.bgColor.withOpacity(t.bgOpacity),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        txt, 
-        style: TextStyle(
-          color: t.color, 
-          fontSize: t.fontSize, 
-          height: 1.3,
-          // 外层描边效果
-          shadows: t.strokeColor != null 
-            ? [
-              Shadow(color: t.strokeColor!, offset: const Offset(-1, -1), blurRadius: 0),
-              Shadow(color: t.strokeColor!, offset: const Offset(1, -1), blurRadius: 0),
-              Shadow(color: t.strokeColor!, offset: const Offset(-1, 1), blurRadius: 0),
-              Shadow(color: t.strokeColor!, offset: const Offset(1, 1), blurRadius: 0),
-            ]
-            : null,
-        ), 
-        textAlign: TextAlign.center
-      ),
+      decoration: BoxDecoration(color: t.bgColor.withOpacity(t.bgOpacity), borderRadius: BorderRadius.circular(6)),
+      child: Text(txt, style: TextStyle(color: t.color, fontSize: t.fontSize, height: 1.3, shadows: t.strokeColor != null 
+        ? [
+          Shadow(color: t.strokeColor!, offset: const Offset(-1, -1), blurRadius: 0),
+          Shadow(color: t.strokeColor!, offset: const Offset(1, -1), blurRadius: 0),
+          Shadow(color: t.strokeColor!, offset: const Offset(-1, 1), blurRadius: 0),
+          Shadow(color: t.strokeColor!, offset: const Offset(1, 1), blurRadius: 0),
+        ] : null), textAlign: TextAlign.center),
     ));
   }
 
@@ -327,7 +307,9 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
             setState(() { _volume = (_volume - delta).clamp(0.0, 1.0); });
             _vc.setVolume(_volume);
           } else if (_brightAdj) {
-            setState(() { _brightness = (_brightness - delta).clamp(0.0, 1.0); });
+            final newBrightness = (_brightness - delta).clamp(0.0, 1.0);
+            setState(() { _brightness = newBrightness; });
+            _screenBrightness.setScreenBrightness(newBrightness);
           }
           _gestureStartY = d.globalPosition.dy;
         }
@@ -338,62 +320,70 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
 
   Widget _buildControls(ColorScheme cs) {
     final size = MediaQuery.of(context).size;
+    final isLandscape = size.width > size.height;
     
     return Stack(children: [
       // 顶部渐变
       Positioned(top: 0, left: 0, right: 0, height: size.height * 0.12,
         child: Container(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.black.withOpacity(0.7), Colors.transparent])))),
-      
       // 底部渐变
       Positioned(bottom: 0, left: 0, right: 0, height: size.height * 0.18,
         child: Container(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.bottomCenter, end: Alignment.topCenter, colors: [Colors.black.withOpacity(0.8), Colors.transparent])))),
-      
       // 顶部栏
       Positioned(top: 0, left: 0, right: 0, child: _buildTopBar(cs, size)),
-      
-      // 左侧亮度条 - 只在调整时显示
-      if (_brightAdj) Positioned(left: size.width * 0.08, top: size.height * 0.35, child: _buildAdjustIndicator(cs, _brightness, FluentIcons.brightness_high_24_regular, '亮度')),
-      
-      // 右侧音量条 - 只在调整时显示
-      if (_volAdj) Positioned(right: size.width * 0.08, top: size.height * 0.35, child: _buildAdjustIndicator(cs, _volume, FluentIcons.speaker_2_24_regular, '音量')),
-      
+      // 左侧亮度条 - 只在调整时显示，横屏时调整位置
+      if (_brightAdj) Positioned(
+        left: isLandscape ? size.width * 0.15 : size.width * 0.08,
+        top: size.height * 0.25,
+        child: _buildAdjustIndicator(cs, _brightness, FluentIcons.brightness_high_24_regular, '亮度'),
+      ),
+      // 右侧音量条 - 只在调整时显示，横屏时调整位置
+      if (_volAdj) Positioned(
+        right: isLandscape ? size.width * 0.15 : size.width * 0.08,
+        top: size.height * 0.25,
+        child: _buildAdjustIndicator(cs, _volume, FluentIcons.speaker_2_24_regular, '音量'),
+      ),
       // 中央快进快退提示
       if (_seeking) Positioned.fill(child: Center(child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
         decoration: BoxDecoration(color: Colors.black.withOpacity(0.7), borderRadius: BorderRadius.circular(12)),
         child: Text('${_seekDelta > 0 ? '快进' : '快退'} ${(_seekDelta.abs() / 1000).toStringAsFixed(1)}秒', style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w500)),
       ))),
-      
       // 底部控制栏
       Positioned(bottom: 0, left: 0, right: 0, child: _buildBottomBar(cs, size)),
     ]);
   }
 
-  /// 调整指示器 - 更大更清晰
+  /// 调整指示器 - 固定大小
   Widget _buildAdjustIndicator(ColorScheme cs, double value, IconData icon, String label) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+      width: 70, // 固定宽度
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
       decoration: BoxDecoration(color: Colors.black.withOpacity(0.7), borderRadius: BorderRadius.circular(12)),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: Colors.white, size: 28),
-          const SizedBox(height: 12),
+          Icon(icon, color: Colors.white, size: 24),
+          const SizedBox(height: 10),
           // 进度条
           Container(
-            width: 6, height: 120,
+            width: 5, height: 100,
             decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(3)),
             child: Stack(alignment: Alignment.bottomCenter, children: [
               Container(
-                height: 120 * value,
+                height: 100 * value,
                 decoration: BoxDecoration(color: cs.primary, borderRadius: BorderRadius.circular(3)),
               ),
             ]),
           ),
-          const SizedBox(height: 12),
-          Text('${(value * 100).toInt()}%', style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500)),
-          const SizedBox(height: 4),
-          Text(label, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+          const SizedBox(height: 10),
+          // 固定宽度的数字显示
+          SizedBox(
+            width: 46, // 固定宽度
+            child: Text('${(value * 100).toInt()}%', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500), textAlign: TextAlign.center),
+          ),
+          const SizedBox(height: 2),
+          Text(label, style: const TextStyle(color: Colors.white54, fontSize: 11)),
         ],
       ),
     );
@@ -404,13 +394,10 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
       height: size.height * 0.1,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Row(children: [
-        // 返回
         GestureDetector(onTap: () => Navigator.pop(context), child: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 22)),
         const SizedBox(width: 8),
-        // 标题
         Expanded(child: Text(widget.videoName, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis)),
         const SizedBox(width: 8),
-        // 循环标签
         GestureDetector(
           onTap: () => setState(() => _loop = !_loop),
           child: Container(
@@ -420,13 +407,9 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
           ),
         ),
         const SizedBox(width: 8),
-        // CC字幕
         IconButton(icon: Icon(_sub1.subtitles.isNotEmpty ? (_showSub1 ? FluentIcons.closed_caption_24_filled : FluentIcons.closed_caption_24_regular) : FluentIcons.closed_caption_off_24_regular, color: Colors.white, size: 20), padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 36, minHeight: 36), onPressed: () { if (_sub1.subtitles.isNotEmpty) setState(() => _showSub1 = !_showSub1); else _loadSub(1); }),
-        // 旋转
         IconButton(icon: const Icon(FluentIcons.phone_tablet_24_regular, color: Colors.white, size: 20), padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 36, minHeight: 36), onPressed: _toggleRotation),
-        // 锁定
         IconButton(icon: Icon(_locked ? FluentIcons.lock_closed_24_filled : FluentIcons.lock_open_24_regular, color: Colors.white, size: 20), padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 36, minHeight: 36), onPressed: () => setState(() => _locked = !_locked)),
-        // 设置
         IconButton(icon: const Icon(FluentIcons.options_24_regular, color: Colors.white, size: 20), padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 36, minHeight: 36), onPressed: _showSettings),
       ]),
     ));
@@ -439,7 +422,6 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
     return SafeArea(child: Container(
       padding: const EdgeInsets.only(left: 12, right: 12, bottom: 8),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        // 进度条
         Row(children: [
           SizedBox(width: 50, child: Text(_fmt(pos), style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500))),
           Expanded(child: SliderTheme(
@@ -448,33 +430,21 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
           )),
           SizedBox(width: 50, child: Text(_fmt(dur), style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500), textAlign: TextAlign.right)),
         ]),
-        
         const SizedBox(height: 8),
-        
-        // 控制按钮组
         Row(children: [
-          // 左侧：播放控制
           Expanded(
             child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              // 快退
               IconButton(icon: const Icon(FluentIcons.previous_24_filled, color: Colors.white, size: 26), onPressed: () => _vc.seekTo(_vc.value.position - const Duration(seconds: 10))),
               const SizedBox(width: 20),
-              // 播放/暂停（无背景）
               GestureDetector(onTap: _togglePlay, child: Icon(_playing ? FluentIcons.pause_24_filled : FluentIcons.play_24_filled, color: Colors.white, size: 40)),
               const SizedBox(width: 20),
-              // 快进
               IconButton(icon: const Icon(FluentIcons.next_24_filled, color: Colors.white, size: 26), onPressed: () => _vc.seekTo(_vc.value.position + const Duration(seconds: 10))),
             ]),
           ),
-          
-          // 右侧：功能按钮
           Row(children: [
-            // 倍速
             _textBtn('${_speed}x', _showSpeed),
             const SizedBox(width: 16),
-            // 比例
             _textBtn('比例', _showAspect),
-            // 选集按钮（如果有播放列表）
             if (hasPlaylist) ...[
               const SizedBox(width: 16),
               _textBtn('选集', () => setState(() => _showPlaylist = true)),
@@ -485,7 +455,6 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
     ));
   }
 
-  /// 选集菜单
   Widget _buildPlaylistMenu(ColorScheme cs) {
     return Positioned.fill(child: GestureDetector(
       onTap: () => setState(() => _showPlaylist = false),
@@ -500,7 +469,6 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 标题
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.white12))),
@@ -510,7 +478,6 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
                     IconButton(icon: const Icon(Icons.close, color: Colors.white), onPressed: () => setState(() => _showPlaylist = false)),
                   ]),
                 ),
-                // 列表
                 Expanded(
                   child: ListView.builder(
                     itemCount: widget.playlist!.length,
@@ -630,7 +597,6 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
         const SizedBox(height: 8),
         Row(children: [const Text('位置', style: TextStyle(color: Colors.white54, fontSize: 12)), Expanded(child: Slider(value: t.position, min: 0.1, max: 0.9, activeColor: cs.primary, onChanged: (v) => upd(t.copyWith(position: v), show))), Text(t.position < 0.4 ? '上' : t.position > 0.7 ? '下' : '中', style: const TextStyle(color: Colors.white38, fontSize: 11))]),
         Row(children: [const Text('大小', style: TextStyle(color: Colors.white54, fontSize: 12)), Expanded(child: Slider(value: t.fontSize, min: 12, max: 28, activeColor: cs.primary, onChanged: (v) => upd(t.copyWith(fontSize: v), show))), Text('${t.fontSize.toInt()}', style: const TextStyle(color: Colors.white38, fontSize: 11))]),
-        // 背景透明度
         Row(children: [const Text('背景', style: TextStyle(color: Colors.white54, fontSize: 12)), Expanded(child: Slider(value: t.bgOpacity, min: 0.0, max: 1.0, activeColor: cs.primary, onChanged: (v) => upd(t.copyWith(bgOpacity: v), show))), Text('${(t.bgOpacity * 100).toInt()}%', style: const TextStyle(color: Colors.white38, fontSize: 11))]),
         const Text('文字颜色', style: TextStyle(color: Colors.white54, fontSize: 12)), const SizedBox(height: 6),
         Wrap(spacing: 8, children: [Colors.white, Colors.yellow, Colors.cyan, Colors.green, Colors.pink].map((c) => GestureDetector(onTap: () => upd(t.copyWith(color: c), show), child: Container(width: 26, height: 26, decoration: BoxDecoration(color: c, shape: BoxShape.circle, border: t.color == c ? Border.all(color: cs.primary, width: 2) : null)))).toList()),
@@ -694,21 +660,4 @@ class VideoItem {
   final String? thumbnail;
   
   const VideoItem({required this.id, required this.path, required this.name, this.thumbnail});
-}
-
-// 统一的VideoItem类，包含size属性
-class VideoItemData {
-  final String id;
-  final String path;
-  final String name;
-  final int size;
-  final String? thumbnail;
-  
-  const VideoItemData({
-    required this.id, 
-    required this.path, 
-    required this.name,
-    required this.size,
-    this.thumbnail
-  });
 }

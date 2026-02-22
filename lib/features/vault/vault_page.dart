@@ -6,7 +6,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:encrypt/encrypt.dart' as encrypt;
+import 'package:encrypt/encrypt.dart' as enc;
 import 'package:crypto/crypto.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/services/settings_service.dart';
@@ -28,12 +28,11 @@ class _VaultPageState extends State<VaultPage> {
   double _encryptProgress = 0;
   bool _showProgress = false;
   
-  encrypt.Encrypter? _enc;
-  encrypt.IV? _iv;
+  enc.Encrypter? _enc;
+  enc.IV? _iv;
   late Directory _vaultDir, _hiddenDir, _configDir;
   File? _vaultDataFile;
   
-  // 逼迫密码相关
   String? _duressPassword;
   DateTime? _duressActivated;
   List<String> _decoyFiles = [];
@@ -53,14 +52,10 @@ class _VaultPageState extends State<VaultPage> {
     
     _vaultDataFile = File('${_configDir.path}/.vault_data');
     
-    // 加载逼迫密码配置
     await _loadDuressConfig();
-    
-    // 加载文件列表
     await _loadFileList();
   }
 
-  /// 加载逼迫密码配置
   Future<void> _loadDuressConfig() async {
     try {
       final configFile = File('${_configDir.path}/.bipo.txt');
@@ -85,19 +80,6 @@ class _VaultPageState extends State<VaultPage> {
     }
   }
 
-  /// 保存逼迫密码配置
-  Future<void> _saveDuressConfig() async {
-    try {
-      final configFile = File('${_configDir.path}/.bipo.txt');
-      final data = '$_duressPassword|${_duressActivated?.toIso8601String() ?? ''}|${_decoyFiles.join(',')}';
-      final encrypted = _encryptConfig(data);
-      await configFile.writeAsString(encrypted);
-    } catch (e) {
-      debugPrint('保存逼迫密码配置失败: $e');
-    }
-  }
-
-  /// 简单加密配置（base64 + 字母推移）
   String _encryptConfig(String data) {
     final random = DateTime.now().millisecondsSinceEpoch % 26;
     final shifted = data.split('').map((c) {
@@ -111,7 +93,6 @@ class _VaultPageState extends State<VaultPage> {
     return base64Encode(utf8.encode('$random$shifted'));
   }
 
-  /// 解密配置
   String? _decryptConfig(String encrypted) {
     try {
       final decoded = utf8.decode(base64Decode(encrypted));
@@ -132,12 +113,11 @@ class _VaultPageState extends State<VaultPage> {
 
   void _initEnc(String pwd) {
     final keyBytes = sha256.convert(utf8.encode(pwd)).bytes;
-    final key = encrypt.Key(Uint8List.fromList(keyBytes));
-    _iv = encrypt.IV.fromLength(16);
-    _enc = encrypt.Encrypter(encrypt.AES(key));
+    final key = enc.Key(Uint8List.fromList(keyBytes));
+    _iv = enc.IV.fromLength(16);
+    _enc = enc.Encrypter(enc.AES(key));
   }
 
-  /// 加载文件列表（持久化）
   Future<void> _loadFileList() async {
     try {
       if (_vaultDataFile != null && await _vaultDataFile!.exists()) {
@@ -152,7 +132,6 @@ class _VaultPageState extends State<VaultPage> {
     }
   }
 
-  /// 保存文件列表
   Future<void> _saveFileList() async {
     try {
       if (_vaultDataFile != null) {
@@ -266,7 +245,6 @@ class _VaultPageState extends State<VaultPage> {
     s.setVaultPassword(_newPwdCtrl.text);
     _initEnc(_newPwdCtrl.text);
     
-    // 设置逼迫密码
     if (_duressPwdCtrl.text.isNotEmpty) {
       _duressPassword = _duressPwdCtrl.text;
       _saveDuressConfig();
@@ -279,21 +257,17 @@ class _VaultPageState extends State<VaultPage> {
   void _unlock(SettingsService s) {
     if (_pwdCtrl.text.isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('请输入密码'))); return; }
     
-    // 检查是否是逼迫密码
     if (_pwdCtrl.text == _duressPassword) {
       _handleDuressLogin();
       return;
     }
     
-    // 检查是否在逼迫模式下
     if (_duressActivated != null) {
       final now = DateTime.now();
       if (now.difference(_duressActivated!).inDays < 5) {
-        // 仍在隐藏期内，显示伪装文件
         _showDecoyFiles();
         return;
       } else {
-        // 隐藏期已过，重置
         _duressActivated = null;
         _saveDuressConfig();
       }
@@ -308,12 +282,10 @@ class _VaultPageState extends State<VaultPage> {
     }
   }
 
-  /// 处理逼迫密码登录
   void _handleDuressLogin() {
     setState(() {
       _duressActivated = DateTime.now();
       _unlocked = true;
-      // 显示伪装文件
       _files = _decoyFiles.map((p) => VaultFile(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         name: p.split('/').last,
@@ -329,7 +301,6 @@ class _VaultPageState extends State<VaultPage> {
     _pwdCtrl.clear();
   }
 
-  /// 显示伪装文件
   void _showDecoyFiles() {
     setState(() {
       _unlocked = true;
@@ -386,11 +357,16 @@ class _VaultPageState extends State<VaultPage> {
       if (!await orig.exists()) return;
       
       final bytes = await orig.readAsBytes();
-      final encd = _enc!.encryptBytes(bytes, iv: _iv!);
+      final encrypted = _enc!.encryptBytes(bytes, iv: _iv!);
       
       final id = DateTime.now().millisecondsSinceEpoch.toString();
-      await File('${_vaultDir.path}/$id.enc').writeAsBytes(encd.bytes);
-      await orig.rename('${_hiddenDir.path}/$id.${name.split('.').last}');
+      final encPath = '${_vaultDir.path}/$id.enc';
+      
+      // 保存加密文件
+      await File(encPath).writeAsBytes(encrypted.bytes);
+      
+      // 删除原文件
+      await orig.delete();
       
       final ext = name.split('.').last.toLowerCase();
       String type = 'document';
@@ -399,8 +375,8 @@ class _VaultPageState extends State<VaultPage> {
       
       setState(() => _files.add(VaultFile(
         id: id, name: name, originalPath: path,
-        encryptedPath: '${_vaultDir.path}/$id.enc',
-        hiddenPath: '${_hiddenDir.path}/$id.$ext',
+        encryptedPath: encPath,
+        hiddenPath: '',
         type: type, size: bytes.length, addedAt: DateTime.now(),
       )));
     } catch (e) {
@@ -411,37 +387,58 @@ class _VaultPageState extends State<VaultPage> {
   Future<void> _view(VaultFile f) async {
     if (_enc == null) return;
     try {
-      final encd = encrypt.Encrypted(await File(f.encryptedPath).readAsBytes());
-      final dec = _enc!.decryptBytes(encd, iv: _iv!);
-      final tmp = File('${(await getTemporaryDirectory()).path}/${f.name}');
-      await tmp.writeAsBytes(dec);
+      final encFile = File(f.encryptedPath);
+      if (!await encFile.exists()) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('加密文件不存在')));
+        return;
+      }
+      
+      final encryptedBytes = await encFile.readAsBytes();
+      final encrypted = enc.Encrypted(encryptedBytes);
+      final decrypted = _enc!.decryptBytes(encrypted, iv: _iv!);
+      
+      final tmpDir = await getTemporaryDirectory();
+      final tmpFile = File('${tmpDir.path}/${f.name}');
+      await tmpFile.writeAsBytes(decrypted);
       
       if (mounted) {
         showDialog(context: context, builder: (c) => AlertDialog(
           title: Text(f.name),
-          content: f.type == 'image' ? Image.file(tmp) : const Text('文件已解密'),
+          content: f.type == 'image' ? Image.file(tmpFile) : Text('文件已解密到临时目录\n${tmpFile.path}'),
           actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('关闭'))],
         ));
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('查看失败: $e')));
+      debugPrint('解密失败: $e');
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('解密失败: $e')));
     }
   }
 
   Future<void> _restore(VaultFile f) async {
     if (_enc == null) return;
     try {
-      final encd = encrypt.Encrypted(await File(f.encryptedPath).readAsBytes());
-      final dec = _enc!.decryptBytes(encd, iv: _iv!);
-      await File(f.originalPath).writeAsBytes(dec);
-      await File(f.encryptedPath).delete();
-      await File(f.hiddenPath).delete();
+      final encFile = File(f.encryptedPath);
+      if (!await encFile.exists()) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('加密文件不存在')));
+        return;
+      }
+      
+      final encryptedBytes = await encFile.readAsBytes();
+      final encrypted = enc.Encrypted(encryptedBytes);
+      final decrypted = _enc!.decryptBytes(encrypted, iv: _iv!);
+      
+      // 还原到原路径
+      await File(f.originalPath).writeAsBytes(decrypted);
+      
+      // 删除加密文件
+      await encFile.delete();
       
       setState(() => _files.removeWhere((e) => e.id == f.id));
       await _saveFileList();
       
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('已还原到 ${f.originalPath}')));
     } catch (e) {
+      debugPrint('还原失败: $e');
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('还原失败: $e')));
     }
   }
@@ -455,7 +452,6 @@ class _VaultPageState extends State<VaultPage> {
         Navigator.pop(c);
         try {
           await File(f.encryptedPath).delete();
-          await File(f.hiddenPath).delete();
           setState(() => _files.removeWhere((e) => e.id == f.id));
           await _saveFileList();
         } catch (e) {
@@ -464,6 +460,17 @@ class _VaultPageState extends State<VaultPage> {
       }, child: const Text('删除')),
     ],
   ));
+  
+  Future<void> _saveDuressConfig() async {
+    try {
+      final configFile = File('${_configDir.path}/.bipo.txt');
+      final data = '$_duressPassword|${_duressActivated?.toIso8601String() ?? ''}|${_decoyFiles.join(',')}';
+      final encrypted = _encryptConfig(data);
+      await configFile.writeAsString(encrypted);
+    } catch (e) {
+      debugPrint('保存逼迫密码配置失败: $e');
+    }
+  }
 }
 
 class VaultFile {

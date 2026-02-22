@@ -33,6 +33,9 @@ dependencies:
   # Permissions
   permission_handler: ^11.3.0
   
+  # Screen Brightness
+  screen_brightness: ^1.0.1
+  
   # UI
   flutter_animate: ^4.3.0
   
@@ -44,8 +47,6 @@ dependencies:
   # Icons
   cupertino_icons: ^1.0.6
   fluentui_system_icons: ^1.1.223
-  
-  # Dynamic Color (Material You)
 
 dev_dependencies:
   flutter_test:

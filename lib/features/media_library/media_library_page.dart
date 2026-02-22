@@ -31,6 +31,7 @@ class _MediaLibraryPageState extends State<MediaLibraryPage> {
     
     try {
       final Map<String, List<VideoItemData>> folders = {};
+      final Set<String> scannedPaths = {}; // 用于去重
       final cacheDir = await getTemporaryDirectory();
       
       final dirs = [
@@ -45,7 +46,7 @@ class _MediaLibraryPageState extends State<MediaLibraryPage> {
       for (final dirPath in dirs) {
         final dir = Directory(dirPath);
         if (await dir.exists()) {
-          await _scanDirectory(dir, folders, cacheDir.path);
+          await _scanDirectory(dir, folders, scannedPaths, cacheDir.path);
         }
       }
       
@@ -55,17 +56,18 @@ class _MediaLibraryPageState extends State<MediaLibraryPage> {
           if (entity is Directory) {
             final name = p.basename(entity.path);
             if (!name.startsWith('.') && !['Android', 'LOST.DIR', 'System', 'system'].contains(name)) {
-              await _scanDirectory(entity, folders, cacheDir.path, maxDepth: 2);
+              await _scanDirectory(entity, folders, scannedPaths, cacheDir.path, maxDepth: 2);
             }
           }
         }
       }
       
+      // 为每个文件夹生成缩略图
       for (final folder in folders.keys) {
         final videos = folders[folder]!;
         if (videos.isNotEmpty) {
           final firstVideo = videos.first;
-          if (firstVideo.thumbnail == null) {
+          if (firstVideo.thumbnail == null && !_thumbnails.containsKey(folder)) {
             try {
               final thumb = await VideoThumbnail.thumbnailFile(
                 video: firstVideo.path,
@@ -99,36 +101,43 @@ class _MediaLibraryPageState extends State<MediaLibraryPage> {
     }
   }
 
-  Future<void> _scanDirectory(Directory dir, Map<String, List<VideoItemData>> folders, String cachePath, {int maxDepth = 3, int currentDepth = 0}) async {
+  Future<void> _scanDirectory(Directory dir, Map<String, List<VideoItemData>> folders, Set<String> scannedPaths, String cachePath, {int maxDepth = 3, int currentDepth = 0}) async {
     if (currentDepth >= maxDepth) return;
     
     try {
       await for (final entity in dir.list()) {
         if (entity is File) {
-          final ext = p.extension(entity.path).toLowerCase();
+          final filePath = entity.path;
+          
+          // 检查是否已经扫描过
+          if (scannedPaths.contains(filePath)) continue;
+          
+          final ext = p.extension(filePath).toLowerCase();
           if (_videoExtensions.contains(ext)) {
-            final folderPath = p.dirname(entity.path);
+            scannedPaths.add(filePath); // 标记为已扫描
+            
+            final folderPath = p.dirname(filePath);
             final folderName = p.basename(folderPath);
             
             if (!folders.containsKey(folderName)) {
               folders[folderName] = [];
             }
             
-            final id = entity.path.hashCode.toString();
+            final id = filePath.hashCode.toString();
             final thumbPath = '$cachePath/$id.jpg';
             final hasThumb = await File(thumbPath).exists();
             final size = await entity.length();
             
             folders[folderName]!.add(VideoItemData(
               id: id,
-              path: entity.path,
-              name: p.basename(entity.path),
+              path: filePath,
+              name: p.basename(filePath),
               size: size,
               thumbnail: hasThumb ? thumbPath : null,
             ));
           }
         } else if (entity is Directory) {
-          await _scanDirectory(entity, folders, cachePath, maxDepth: maxDepth, currentDepth: currentDepth + 1);
+          await _scanDirectory(entity, folders, scannedPaths, cachePath, maxDepth: maxDepth, currentDepth: currentDepth + 1);
         }
       }
     } catch (e) {}
@@ -288,4 +297,20 @@ class _MediaLibraryPageState extends State<MediaLibraryPage> {
       ],
     );
   }
+}
+
+class VideoItemData {
+  final String id;
+  final String path;
+  final String name;
+  final int size;
+  final String? thumbnail;
+  
+  const VideoItemData({
+    required this.id,
+    required this.path,
+    required this.name,
+    required this.size,
+    this.thumbnail,
+  });
 }
