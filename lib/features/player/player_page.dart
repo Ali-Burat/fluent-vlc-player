@@ -305,7 +305,7 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
         decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
         child: Stack(alignment: Alignment.bottomCenter, children: [
           Container(
-            height: active ? null : (value * 100).clamp(10.0, 100.0) + '%',
+            height: active ? null : MediaQuery.of(context).size.height * 0.4 * value,
             decoration: BoxDecoration(color: active ? cs.primary : cs.primary.withOpacity(0.7), borderRadius: BorderRadius.circular(2)),
           ),
         ]),
