@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:uuid/uuid.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/services/settings_service.dart';
 import '../player/player_page.dart';
@@ -17,8 +18,54 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin {
   int _currentIndex = 0;
+  bool _showPermissionDialog = false;
+  bool _permissionsGranted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkPermissions();
+  }
+
+  Future<void> _checkPermissions() async {
+    // 检查存储权限
+    final storageStatus = await Permission.storage.status;
+    final manageStatus = await Permission.manageExternalStorage.status;
+    
+    if (storageStatus.isGranted || manageStatus.isGranted) {
+      setState(() {
+        _permissionsGranted = true;
+      });
+    } else {
+      setState(() {
+        _showPermissionDialog = true;
+      });
+    }
+  }
+
+  Future<void> _requestPermissions() async {
+    // 请求存储权限
+    final statuses = await [
+      Permission.storage,
+      Permission.manageExternalStorage,
+      Permission.videos,
+      Permission.photos,
+    ].request();
+    
+    bool granted = statuses.values.any((status) => status.isGranted);
+    
+    if (!granted) {
+      // 尝试打开设置页面
+      await openAppSettings();
+    }
+    
+    setState(() {
+      _permissionsGranted = granted;
+      _showPermissionDialog = !granted;
+    });
+  }
 
   Future<void> _pickVideoFile() async {
     final result = await FilePicker.platform.pickFiles(type: FileType.video, allowMultiple: true);
@@ -56,13 +103,19 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
+      body: Stack(
         children: [
-          _buildHomeContent(),
-          const MediaLibraryPage(),
-          const VaultPage(),
-          const SettingsPage(),
+          IndexedStack(
+            index: _currentIndex,
+            children: [
+              _buildHomeContent(),
+              const MediaLibraryPage(),
+              const VaultPage(),
+              const SettingsPage(),
+            ],
+          ),
+          // 权限引导对话框
+          if (_showPermissionDialog) _buildPermissionDialog(),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -74,6 +127,52 @@ class _HomePageState extends State<HomePage> {
           NavigationDestination(icon: Icon(FluentIcons.lock_closed_24_regular), selectedIcon: Icon(FluentIcons.lock_closed_24_filled), label: '保险箱'),
           NavigationDestination(icon: Icon(FluentIcons.settings_24_regular), selectedIcon: Icon(FluentIcons.settings_24_filled), label: '设置'),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPermissionDialog() {
+    return Container(
+      color: Colors.black54,
+      child: Center(
+        child: Container(
+          margin: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 64, height: 64,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(FluentIcons.folder_open_24_filled, color: Theme.of(context).colorScheme.primary, size: 32),
+              ),
+              const SizedBox(height: 20),
+              const Text('需要存储权限', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              const Text('为了扫描和管理您的视频文件，请授予存储权限', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: _requestPermissions,
+                  child: const Padding(padding: EdgeInsets.all(12), child: Text('授予权限')),
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => setState(() => _showPermissionDialog = false),
+                child: const Text('稍后再说'),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -144,6 +243,7 @@ class _HomePageState extends State<HomePage> {
                     const SizedBox(height: 8),
                     const Text('• 双击屏幕播放/暂停', style: TextStyle(fontSize: 13)),
                     const Text('• 左右滑动调整进度', style: TextStyle(fontSize: 13)),
+                    const Text('• 左侧上下滑动调整亮度', style: TextStyle(fontSize: 13)),
                     const Text('• 右侧上下滑动调整音量', style: TextStyle(fontSize: 13)),
                     const Text('• 自动加载同名字幕文件', style: TextStyle(fontSize: 13)),
                   ],

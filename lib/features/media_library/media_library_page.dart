@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:path/path.dart' as p;
+import 'package:video_thumbnail/video_thumbnail.dart';
+import 'package:path_provider/path_provider.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/services/settings_service.dart';
 import '../player/player_page.dart';
@@ -15,22 +17,21 @@ class MediaLibraryPage extends StatefulWidget {
 }
 
 class _MediaLibraryPageState extends State<MediaLibraryPage> {
-  Map<String, List<VideoFile>> _folderVideos = {};
+  Map<String, List<VideoItem>> _folderVideos = {};
+  Map<String, String> _thumbnails = {}; // 文件夹缩略图
   bool _scanning = false;
   String? _selectedFolder;
   final List<String> _videoExtensions = ['.mp4', '.avi', '.mkv', '.mov', '.webm', '.flv', '.wmv', '.3gp', '.m4v', '.ts'];
 
   @override
-  void initState() {
-    super.initState();
-    _scanVideos();
-  }
+  void initState() { super.initState(); _scanVideos(); }
 
   Future<void> _scanVideos() async {
     setState(() => _scanning = true);
     
     try {
-      final Map<String, List<VideoFile>> folders = {};
+      final Map<String, List<VideoItem>> folders = {};
+      final cacheDir = await getTemporaryDirectory();
       
       // 扫描常见视频目录
       final dirs = [
@@ -45,25 +46,48 @@ class _MediaLibraryPageState extends State<MediaLibraryPage> {
       for (final dirPath in dirs) {
         final dir = Directory(dirPath);
         if (await dir.exists()) {
-          await _scanDirectory(dir, folders);
+          await _scanDirectory(dir, folders, cacheDir.path);
         }
       }
       
-      // 扫描外部存储
+      // 扫描外部存储根目录
       final extDir = Directory('/storage/emulated/0');
       if (await extDir.exists()) {
         await for (final entity in extDir.list()) {
           if (entity is Directory) {
             final name = p.basename(entity.path);
-            // 跳过系统目录
             if (!name.startsWith('.') && !['Android', 'LOST.DIR', 'System', 'system'].contains(name)) {
-              await _scanDirectory(entity, folders, maxDepth: 2);
+              await _scanDirectory(entity, folders, cacheDir.path, maxDepth: 2);
             }
           }
         }
       }
       
-      // 排序文件夹
+      // 为每个文件夹生成缩略图
+      for (final folder in folders.keys) {
+        final videos = folders[folder]!;
+        if (videos.isNotEmpty) {
+          final firstVideo = videos.first;
+          if (firstVideo.thumbnail == null) {
+            try {
+              final thumb = await VideoThumbnail.thumbnailFile(
+                video: firstVideo.path,
+                thumbnailPath: '${cacheDir.path}/${firstVideo.id}.jpg',
+                imageFormat: ImageFormat.JPEG,
+                maxWidth: 200,
+                quality: 75,
+              );
+              if (thumb != null) {
+                _thumbnails[folder] = thumb;
+              }
+            } catch (e) {
+              debugPrint('生成缩略图失败: $e');
+            }
+          }
+        }
+      }
+      
+      // 排序
       final sortedKeys = folders.keys.toList()..sort();
       final sortedFolders = Map.fromEntries(
         sortedKeys.map((k) => MapEntry(k, folders[k]!..sort((a, b) => a.name.compareTo(b.name))))
@@ -79,7 +103,7 @@ class _MediaLibraryPageState extends State<MediaLibraryPage> {
     }
   }
 
-  Future<void> _scanDirectory(Directory dir, Map<String, List<VideoFile>> folders, {int maxDepth = 3, int currentDepth = 0}) async {
+  Future<void> _scanDirectory(Directory dir, Map<String, List<VideoItem>> folders, String cachePath, {int maxDepth = 3, int currentDepth = 0}) async {
     if (currentDepth >= maxDepth) return;
     
     try {
@@ -94,15 +118,19 @@ class _MediaLibraryPageState extends State<MediaLibraryPage> {
               folders[folderName] = [];
             }
             
-            folders[folderName]!.add(VideoFile(
+            final id = entity.path.hashCode.toString();
+            final thumbPath = '$cachePath/$id.jpg';
+            final hasThumb = await File(thumbPath).exists();
+            
+            folders[folderName]!.add(VideoItem(
+              id: id,
               path: entity.path,
               name: p.basename(entity.path),
-              folder: folderName,
-              size: await entity.length(),
+              thumbnail: hasThumb ? thumbPath : null,
             ));
           }
         } else if (entity is Directory) {
-          await _scanDirectory(entity, folders, maxDepth: maxDepth, currentDepth: currentDepth + 1);
+          await _scanDirectory(entity, folders, cachePath, maxDepth: maxDepth, currentDepth: currentDepth + 1);
         }
       }
     } catch (e) {
@@ -125,10 +153,7 @@ class _MediaLibraryPageState extends State<MediaLibraryPage> {
       appBar: AppBar(
         title: const Text('媒体库'),
         actions: [
-          IconButton(
-            icon: const Icon(FluentIcons.arrow_sync_24_regular),
-            onPressed: _scanning ? null : _scanVideos,
-          ),
+          IconButton(icon: const Icon(FluentIcons.arrow_sync_24_regular), onPressed: _scanning ? null : _scanVideos),
         ],
       ),
       body: _scanning
@@ -159,22 +184,40 @@ class _MediaLibraryPageState extends State<MediaLibraryPage> {
         final folder = _folderVideos.keys.elementAt(index);
         final videos = _folderVideos[folder]!;
         final totalSize = videos.fold<int>(0, (sum, v) => sum + v.size);
+        final thumbnail = _thumbnails[folder];
         
         return Card(
           margin: const EdgeInsets.only(bottom: 8),
-          child: ListTile(
-            leading: Container(
-              width: 48, height: 48,
-              decoration: BoxDecoration(
-                color: colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(FluentIcons.folder_24_filled, color: colorScheme.primary),
-            ),
-            title: Text(folder, style: const TextStyle(fontWeight: FontWeight.w500)),
-            subtitle: Text('${videos.length} 个视频 · ${_formatSize(totalSize)}'),
-            trailing: const Icon(Icons.chevron_right),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
             onTap: () => setState(() => _selectedFolder = folder),
+            child: Row(
+              children: [
+                // 缩略图
+                Container(
+                  width: 80, height: 80,
+                  color: colorScheme.surfaceVariant,
+                  child: thumbnail != null
+                      ? Image.file(File(thumbnail), fit: BoxFit.cover)
+                      : Icon(FluentIcons.folder_24_filled, color: colorScheme.primary, size: 32),
+                ),
+                // 信息
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(folder, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15)),
+                        const SizedBox(height: 4),
+                        Text('${videos.length} 个视频 · ${_formatSize(totalSize)}', style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                ),
+                const Icon(Icons.chevron_right),
+              ],
+            ),
           ),
         );
       },
@@ -191,10 +234,7 @@ class _MediaLibraryPageState extends State<MediaLibraryPage> {
           padding: const EdgeInsets.all(8),
           child: Row(
             children: [
-              IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () => setState(() => _selectedFolder = null),
-              ),
+              IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => setState(() => _selectedFolder = null)),
               Text(_selectedFolder!, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
               const Spacer(),
               Text('${videos.length} 个视频', style: TextStyle(color: colorScheme.onSurfaceVariant)),
@@ -211,22 +251,45 @@ class _MediaLibraryPageState extends State<MediaLibraryPage> {
               final video = videos[index];
               return Card(
                 margin: const EdgeInsets.only(bottom: 8),
-                child: ListTile(
-                  leading: Container(
-                    width: 56, height: 56,
-                    decoration: BoxDecoration(
-                      color: colorScheme.surfaceVariant,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(FluentIcons.video_24_filled),
-                  ),
-                  title: Text(video.name, maxLines: 2, overflow: TextOverflow.ellipsis),
-                  subtitle: Text(_formatSize(video.size)),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
                   onTap: () {
                     Navigator.push(context, MaterialPageRoute(
-                      builder: (_) => PlayerPage(videoPath: video.path, videoName: video.name),
+                      builder: (_) => PlayerPage(
+                        videoPath: video.path, 
+                        videoName: video.name,
+                        videoId: video.id,
+                        playlist: videos,
+                        currentIndex: index,
+                      ),
                     ));
                   },
+                  child: Row(
+                    children: [
+                      // 缩略图
+                      Container(
+                        width: 100, height: 60,
+                        color: colorScheme.surfaceVariant,
+                        child: video.thumbnail != null
+                            ? Image.file(File(video.thumbnail!), fit: BoxFit.cover)
+                            : const Icon(FluentIcons.video_24_filled),
+                      ),
+                      // 信息
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(video.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w500)),
+                              const SizedBox(height: 4),
+                              Text(_formatSize(video.size), style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               );
             },
@@ -237,16 +300,18 @@ class _MediaLibraryPageState extends State<MediaLibraryPage> {
   }
 }
 
-class VideoFile {
+class VideoItem {
+  final String id;
   final String path;
   final String name;
-  final String folder;
   final int size;
+  final String? thumbnail;
   
-  const VideoFile({
+  const VideoItem({
+    required this.id,
     required this.path,
     required this.name,
-    required this.folder,
     required this.size,
+    this.thumbnail,
   });
 }

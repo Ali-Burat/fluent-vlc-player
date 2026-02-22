@@ -27,16 +27,26 @@ dependencies:
   # File Management
   file_picker: ^6.2.0
   
+  # Video Thumbnail
+  video_thumbnail: ^0.5.3
+  
+  # Permissions
+  permission_handler: ^11.3.0
+  
   # UI
   flutter_animate: ^4.3.0
   
   # Utils
   uuid: ^4.3.3
   intl: ^0.18.1
+  path: ^1.8.3
   
   # Icons
   cupertino_icons: ^1.0.6
   fluentui_system_icons: ^1.1.223
+  
+  # Dynamic Color (Material You)
+  dynamic_color: ^1.7.0
 
 dev_dependencies:
   flutter_test:
