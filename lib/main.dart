@@ -8,53 +8,25 @@ import 'features/home/home_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // 初始化SharedPreferences
   final prefs = await SharedPreferences.getInstance();
-  
-  // 设置系统UI样式
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.dark,
-      systemNavigationBarColor: Colors.transparent,
-    ),
-  );
-  
-  runApp(
-    ChangeNotifierProvider(
-      create: (_) => SettingsService(prefs),
-      child: const FluentPlayerApp(),
-    ),
-  );
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.dark,
+    systemNavigationBarColor: Colors.transparent,
+  ));
+  runApp(ChangeNotifierProvider(create: (_) => SettingsService(prefs), child: const FluentPlayerApp()));
 }
 
 class FluentPlayerApp extends StatelessWidget {
   const FluentPlayerApp({super.key});
-
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsService>();
-    
-    // 创建颜色方案
-    ColorScheme lightColorScheme = ColorScheme.fromSeed(
-      seedColor: settings.accentColor,
-      brightness: Brightness.light,
-    );
-    
-    ColorScheme darkColorScheme = ColorScheme.fromSeed(
-      seedColor: settings.accentColor,
-      brightness: Brightness.dark,
-    );
-    
-    // AMOLED深色模式
+    ColorScheme lightColorScheme = ColorScheme.fromSeed(seedColor: settings.accentColor, brightness: Brightness.light);
+    ColorScheme darkColorScheme = ColorScheme.fromSeed(seedColor: settings.accentColor, brightness: Brightness.dark);
     if (settings.useAmoledDark && settings.themeMode == ThemeMode.dark) {
-      darkColorScheme = darkColorScheme.copyWith(
-        surface: Colors.black,
-        background: Colors.black,
-      );
+      darkColorScheme = darkColorScheme.copyWith(surface: Colors.black, background: Colors.black);
     }
-    
     return MaterialApp(
       title: 'Fluent Player',
       debugShowCheckedModeBanner: false,

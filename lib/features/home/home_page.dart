@@ -10,10 +10,8 @@ import '../player/player_page.dart';
 import '../settings/settings_page.dart';
 import '../vault/vault_page.dart';
 
-/// 主页面
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
-
   @override
   State<HomePage> createState() => _HomePageState();
 }
@@ -22,363 +20,77 @@ class _HomePageState extends State<HomePage> {
   int _currentIndex = 0;
   final List<RecentVideo> _recentVideos = [];
 
-  @override
-  void initState() {
-    super.initState();
-    _loadRecentVideos();
-  }
-
-  void _loadRecentVideos() {
-    // 从设置加载最近播放
-  }
-
   Future<void> _pickVideoFile() async {
-    try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.video,
-        allowMultiple: true,
-      );
-
-      if (result != null && result.files.isNotEmpty) {
-        for (final file in result.files) {
-          if (file.path != null) {
-            _playVideo(file.path!, file.name);
-          }
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('选择文件失败: $e')),
-        );
+    final result = await FilePicker.platform.pickFiles(type: FileType.video, allowMultiple: true);
+    if (result != null && result.files.isNotEmpty) {
+      for (final file in result.files) {
+        if (file.path != null) _playVideo(file.path!, file.name);
       }
     }
   }
 
   void _playVideo(String path, String name) {
-    final videoId = const Uuid().v4();
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => PlayerPage(
-          videoPath: path,
-          videoName: name,
-          videoId: videoId,
-        ),
-      ),
-    );
+    Navigator.push(context, MaterialPageRoute(builder: (_) => PlayerPage(videoPath: path, videoName: name, videoId: const Uuid().v4())));
   }
 
   void _showUrlDialog() {
     final controller = TextEditingController();
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('打开网络链接'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(
-            hintText: '输入视频URL',
-            prefixIcon: Icon(FluentIcons.link_24_regular),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final url = controller.text.trim();
-              if (url.isNotEmpty) {
-                Navigator.pop(context);
-                _playVideo(url, url.split('/').last);
-              }
-            },
-            child: const Text('播放'),
-          ),
-        ],
-      ),
-    );
+    showDialog(context: context, builder: (c) => AlertDialog(
+      title: const Text('打开网络链接'),
+      content: TextField(controller: controller, decoration: const InputDecoration(hintText: '输入视频URL', prefixIcon: Icon(FluentIcons.link_24_regular))),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(c), child: const Text('取消')),
+        FilledButton(onPressed: () { Navigator.pop(c); _playVideo(controller.text.trim(), controller.text.split('/').last); }, child: const Text('播放')),
+      ],
+    ));
   }
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: [
-          _buildHomeContent(context, colorScheme),
-          const VaultPage(),
-          const SettingsPage(),
-        ],
-      ),
+      body: IndexedStack(index: _currentIndex, children: [_buildHomeContent(), const VaultPage(), const SettingsPage()]),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
-        onDestinationSelected: (index) {
-          setState(() {
-            _currentIndex = index;
-          });
-        },
+        onDestinationSelected: (i) => setState(() => _currentIndex = i),
         destinations: const [
-          NavigationDestination(
-            icon: Icon(FluentIcons.home_24_regular),
-            selectedIcon: Icon(FluentIcons.home_24_filled),
-            label: '首页',
-          ),
-          NavigationDestination(
-            icon: Icon(FluentIcons.lock_closed_24_regular),
-            selectedIcon: Icon(FluentIcons.lock_closed_24_filled),
-            label: '保险箱',
-          ),
-          NavigationDestination(
-            icon: Icon(FluentIcons.settings_24_regular),
-            selectedIcon: Icon(FluentIcons.settings_24_filled),
-            label: '设置',
-          ),
+          NavigationDestination(icon: Icon(FluentIcons.home_24_regular), selectedIcon: Icon(FluentIcons.home_24_filled), label: '首页'),
+          NavigationDestination(icon: Icon(FluentIcons.lock_closed_24_regular), selectedIcon: Icon(FluentIcons.lock_closed_24_filled), label: '保险箱'),
+          NavigationDestination(icon: Icon(FluentIcons.settings_24_regular), selectedIcon: Icon(FluentIcons.settings_24_filled), label: '设置'),
         ],
       ),
     );
   }
 
-  Widget _buildHomeContent(BuildContext context, ColorScheme colorScheme) {
-    return CustomScrollView(
-      slivers: [
-        SliverAppBar(
-          expandedHeight: 120,
-          floating: true,
-          pinned: true,
-          flexibleSpace: FlexibleSpaceBar(
-            title: Text(
-              'Fluent Player',
-              style: TextStyle(
-                color: colorScheme.onSurface,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            titlePadding: const EdgeInsets.only(left: 16, bottom: 16),
-          ),
-          actions: [
-            IconButton(
-              icon: Icon(FluentIcons.settings_24_regular, color: colorScheme.onSurface),
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (context) => const SettingsPage()),
-                );
-              },
-            ),
-          ],
-        ),
-        SliverPadding(
-          padding: const EdgeInsets.all(AppTheme.spacingM),
-          sliver: SliverList(
-            delegate: SliverChildListDelegate([
-              _buildQuickActions(context, colorScheme),
-              const SizedBox(height: AppTheme.spacingL),
-              _buildRecentSection(context, colorScheme),
-            ]),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildQuickActions(BuildContext context, ColorScheme colorScheme) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '快速操作',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: colorScheme.onSurface,
-              ),
-        ),
-        const SizedBox(height: AppTheme.spacingS),
-        Row(
-          children: [
-            Expanded(
-              child: _QuickActionCard(
-                icon: FluentIcons.folder_open_24_filled,
-                label: '打开文件',
-                color: colorScheme.primaryContainer,
-                onTap: _pickVideoFile,
-              ),
-            ),
-            const SizedBox(width: AppTheme.spacingS),
-            Expanded(
-              child: _QuickActionCard(
-                icon: FluentIcons.link_24_filled,
-                label: '打开链接',
-                color: colorScheme.secondaryContainer,
-                onTap: _showUrlDialog,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildRecentSection(BuildContext context, ColorScheme colorScheme) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              '最近播放',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: colorScheme.onSurface,
-                  ),
-            ),
-            if (_recentVideos.isNotEmpty)
-              TextButton(
-                onPressed: () {
-                  setState(() {
-                    _recentVideos.clear();
-                  });
-                },
-                child: const Text('清空'),
-              ),
-          ],
-        ),
-        const SizedBox(height: AppTheme.spacingS),
-        if (_recentVideos.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(AppTheme.spacingL),
-            decoration: BoxDecoration(
-              color: colorScheme.surfaceVariant,
-              borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-            ),
-            child: Column(
-              children: [
-                Icon(
-                  FluentIcons.video_24_regular,
-                  size: 48,
-                  color: colorScheme.onSurfaceVariant,
-                ),
-                const SizedBox(height: AppTheme.spacingS),
-                Text(
-                  '暂无播放记录',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                ),
-                const SizedBox(height: AppTheme.spacingXS),
-                Text(
-                  '点击上方按钮打开视频文件开始播放',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          )
-        else
-          SizedBox(
-            height: 140,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: _recentVideos.length,
-              itemBuilder: (context, index) {
-                final video = _recentVideos[index];
-                return GestureDetector(
-                  onTap: () => _playVideo(video.path, video.name),
-                  child: Container(
-                    width: 160,
-                    margin: const EdgeInsets.only(right: AppTheme.spacingS),
-                    decoration: BoxDecoration(
-                      color: colorScheme.surfaceVariant,
-                      borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          FluentIcons.video_24_regular,
-                          size: 40,
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                        const SizedBox(height: AppTheme.spacingS),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          child: Text(
-                            video.name,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-      ],
-    );
+  Widget _buildHomeContent() {
+    final cs = Theme.of(context).colorScheme;
+    return CustomScrollView(slivers: [
+      SliverAppBar(expandedHeight: 120, floating: true, pinned: true, flexibleSpace: FlexibleSpaceBar(title: Text('Fluent Player', style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.bold)))),
+      SliverPadding(padding: const EdgeInsets.all(16), sliver: SliverList(delegate: SliverChildListDelegate([
+        Row(children: [
+          Expanded(child: _QuickCard(icon: FluentIcons.folder_open_24_filled, label: '打开文件', color: cs.primaryContainer, onTap: _pickVideoFile)),
+          const SizedBox(width: 8),
+          Expanded(child: _QuickCard(icon: FluentIcons.link_24_filled, label: '打开链接', color: cs.secondaryContainer, onTap: _showUrlDialog)),
+        ]),
+        const SizedBox(height: 24),
+        Text('最近播放', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        Container(padding: const EdgeInsets.all(24), decoration: BoxDecoration(color: cs.surfaceVariant, borderRadius: BorderRadius.circular(16)),
+          child: Column(children: [
+            Icon(FluentIcons.video_24_regular, size: 48, color: cs.onSurfaceVariant),
+            const SizedBox(height: 8),
+            Text('暂无播放记录', style: TextStyle(color: cs.onSurfaceVariant)),
+          ])),
+      ]))),
+    ]);
   }
 }
 
-/// 快速操作卡片
-class _QuickActionCard extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _QuickActionCard({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
-
+class _QuickCard extends StatelessWidget {
+  final IconData icon; final String label; final Color color; final VoidCallback onTap;
+  const _QuickCard({required this.icon, required this.label, required this.color, required this.onTap});
   @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: color,
-      borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-        child: Container(
-          padding: const EdgeInsets.all(AppTheme.spacingM),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 32),
-              const SizedBox(height: AppTheme.spacingXS),
-              Text(
-                label,
-                style: Theme.of(context).textTheme.labelMedium,
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Material(color: color, borderRadius: BorderRadius.circular(12), child: InkWell(onTap: onTap, borderRadius: BorderRadius.circular(12),
+    child: Container(padding: const EdgeInsets.all(16), child: Column(children: [Icon(icon, size: 32), const SizedBox(height: 4), Text(label)]))));
 }
 
-/// 最近播放视频
-class RecentVideo {
-  final String path;
-  final String name;
-  final DateTime playedAt;
-
-  const RecentVideo({
-    required this.path,
-    required this.name,
-    required this.playedAt,
-  });
-}
+class RecentVideo { final String path; final String name; final DateTime playedAt; const RecentVideo({required this.path, required this.name, required this.playedAt}); }

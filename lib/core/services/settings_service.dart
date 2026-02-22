@@ -2,153 +2,38 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// 设置服务 - 本地持久化
 class SettingsService extends ChangeNotifier {
   final SharedPreferences _prefs;
-  
-  static const String _keyThemeMode = 'theme_mode';
-  static const String _keyAccentColor = 'accent_color';
-  static const String _keyMaterialYou = 'material_you';
-  static const String _keyAmoledDark = 'amoled_dark';
-  static const String _keyAutoLoop = 'auto_loop';
-  static const String _keySeamlessLoop = 'seamless_loop';
-  static const String _keyRememberPosition = 'remember_position';
-  static const String _keyPlaybackSpeed = 'playback_speed';
-  static const String _keyVaultEnabled = 'vault_enabled';
-  static const String _keyVaultPassword = 'vault_password_hash';
-  static const String _keyShowThumbnails = 'show_thumbnails';
-  static const String _keyPlayPositions = 'play_positions';
-  
   SettingsService(this._prefs);
   
-  // ========== 主题设置 ==========
+  ThemeMode get themeMode => ThemeMode.values[_prefs.getInt('theme_mode') ?? 0];
+  set themeMode(ThemeMode mode) { _prefs.setInt('theme_mode', mode.index); notifyListeners(); }
   
-  ThemeMode get themeMode {
-    final index = _prefs.getInt(_keyThemeMode) ?? 0;
-    return ThemeMode.values[index];
-  }
+  Color get accentColor { final v = _prefs.getInt('accent_color'); return v != null ? Color(v) : Colors.blue; }
+  set accentColor(Color c) { _prefs.setInt('accent_color', c.value); notifyListeners(); }
   
-  set themeMode(ThemeMode mode) {
-    _prefs.setInt(_keyThemeMode, mode.index);
-    notifyListeners();
-  }
+  bool get useAmoledDark => _prefs.getBool('amoled_dark') ?? false;
+  set useAmoledDark(bool v) { _prefs.setBool('amoled_dark', v); notifyListeners(); }
   
-  Color get accentColor {
-    final value = _prefs.getInt(_keyAccentColor);
-    return value != null ? Color(value) : Colors.blue;
-  }
+  bool get autoLoop => _prefs.getBool('auto_loop') ?? true;
+  set autoLoop(bool v) { _prefs.setBool('auto_loop', v); notifyListeners(); }
   
-  set accentColor(Color color) {
-    _prefs.setInt(_keyAccentColor, color.value);
-    notifyListeners();
-  }
+  bool get seamlessLoop => _prefs.getBool('seamless_loop') ?? true;
+  set seamlessLoop(bool v) { _prefs.setBool('seamless_loop', v); notifyListeners(); }
   
-  bool get useMaterialYou => _prefs.getBool(_keyMaterialYou) ?? true;
+  bool get rememberPosition => _prefs.getBool('remember_position') ?? true;
+  set rememberPosition(bool v) { _prefs.setBool('remember_position', v); notifyListeners(); }
   
-  set useMaterialYou(bool value) {
-    _prefs.setBool(_keyMaterialYou, value);
-    notifyListeners();
-  }
+  double get playbackSpeed => _prefs.getDouble('playback_speed') ?? 1.0;
+  set playbackSpeed(double v) { _prefs.setDouble('playback_speed', v); notifyListeners(); }
   
-  bool get useAmoledDark => _prefs.getBool(_keyAmoledDark) ?? false;
+  bool get hasVaultPassword => _prefs.containsKey('vault_password');
+  void setVaultPassword(String p) { _prefs.setString('vault_password', p.hashCode.toString()); notifyListeners(); }
+  bool verifyVaultPassword(String p) => _prefs.getString('vault_password') == p.hashCode.toString();
   
-  set useAmoledDark(bool value) {
-    _prefs.setBool(_keyAmoledDark, value);
-    notifyListeners();
-  }
+  void savePlayPosition(String id, int pos) { final m = getPlayPositions(); m[id] = pos; _prefs.setString('play_positions', jsonEncode(m)); }
+  int? getPlayPosition(String id) => getPlayPositions()[id];
+  Map<String, int> getPlayPositions() { final d = _prefs.getString('play_positions'); return d == null ? {} : Map.from(jsonDecode(d).map((k, v) => MapEntry(k, v as int))); }
   
-  // ========== 播放设置 ==========
-  
-  bool get autoLoop => _prefs.getBool(_keyAutoLoop) ?? true;
-  
-  set autoLoop(bool value) {
-    _prefs.setBool(_keyAutoLoop, value);
-    notifyListeners();
-  }
-  
-  bool get seamlessLoop => _prefs.getBool(_keySeamlessLoop) ?? true;
-  
-  set seamlessLoop(bool value) {
-    _prefs.setBool(_keySeamlessLoop, value);
-    notifyListeners();
-  }
-  
-  bool get rememberPosition => _prefs.getBool(_keyRememberPosition) ?? true;
-  
-  set rememberPosition(bool value) {
-    _prefs.setBool(_keyRememberPosition, value);
-    notifyListeners();
-  }
-  
-  double get playbackSpeed {
-    final value = _prefs.getDouble(_keyPlaybackSpeed);
-    return value ?? 1.0;
-  }
-  
-  set playbackSpeed(double value) {
-    _prefs.setDouble(_keyPlaybackSpeed, value);
-    notifyListeners();
-  }
-  
-  bool get showThumbnails => _prefs.getBool(_keyShowThumbnails) ?? true;
-  
-  set showThumbnails(bool value) {
-    _prefs.setBool(_keyShowThumbnails, value);
-    notifyListeners();
-  }
-  
-  // ========== 保险箱设置 ==========
-  
-  bool get vaultEnabled => _prefs.getBool(_keyVaultEnabled) ?? false;
-  
-  set vaultEnabled(bool value) {
-    _prefs.setBool(_keyVaultEnabled, value);
-    notifyListeners();
-  }
-  
-  bool get hasVaultPassword => _prefs.containsKey(_keyVaultPassword);
-  
-  void setVaultPassword(String password) {
-    // 简单哈希存储
-    final hash = password.hashCode.toString();
-    _prefs.setString(_keyVaultPassword, hash);
-    notifyListeners();
-  }
-  
-  bool verifyVaultPassword(String password) {
-    final stored = _prefs.getString(_keyVaultPassword);
-    if (stored == null) return false;
-    return stored == password.hashCode.toString();
-  }
-  
-  // ========== 播放位置记录 ==========
-  
-  void savePlayPosition(String videoId, int positionMs) {
-    final positions = getPlayPositions();
-    positions[videoId] = positionMs;
-    _prefs.setString(_keyPlayPositions, jsonEncode(positions));
-  }
-  
-  int? getPlayPosition(String videoId) {
-    final positions = getPlayPositions();
-    return positions[videoId];
-  }
-  
-  Map<String, int> getPlayPositions() {
-    final data = _prefs.getString(_keyPlayPositions);
-    if (data == null) return {};
-    final decoded = jsonDecode(data) as Map<String, dynamic>;
-    return decoded.map((k, v) => MapEntry(k, v as int));
-  }
-  
-  void clearPlayPositions() {
-    _prefs.remove(_keyPlayPositions);
-  }
-  
-  // ========== 重置 ==========
-  
-  void reset() {
-    _prefs.clear();
-    notifyListeners();
-  }
+  void reset() { _prefs.clear(); notifyListeners(); }
 }
