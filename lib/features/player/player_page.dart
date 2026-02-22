@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
-import 'package:chewie/chewie.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme/app_theme.dart';
@@ -28,25 +27,21 @@ class PlayerPage extends StatefulWidget {
 
 class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
   late VideoPlayerController _videoController;
-  ChewieController? _chewieController;
   bool _isInitialized = false;
+  bool _isPlaying = false;
   bool _isSeamlessLoop = true;
   Timer? _loopTimer;
   Timer? _positionSaveTimer;
-  AnimationController? _controlsAnimController;
+  Timer? _progressTimer;
   bool _showControls = true;
   
   // 无感循环参数
-  static const int _preloadMs = 800; // 提前800ms准备循环
+  static const int _preloadMs = 800;
   bool _isPreparingLoop = false;
 
   @override
   void initState() {
     super.initState();
-    _controlsAnimController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 300),
-    );
     _initializePlayer();
   }
 
@@ -75,38 +70,11 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
       // 设置播放速度
       await _videoController.setPlaybackSpeed(settings.playbackSpeed);
 
-      // 创建Chewie控制器
-      _chewieController = ChewieController(
-        videoPlayerController: _videoController,
-        autoPlay: true,
-        looping: false, // 我们自己处理循环
-        allowFullScreen: true,
-        allowMuting: true,
-        allowPlaybackSpeedChanging: true,
-        playbackSpeeds: const [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0],
-
-        additionalOptions: (context) => [
-          OptionItem(
-            onTap: () {
-              Navigator.pop(context);
-              _toggleSeamlessLoop();
-            },
-            iconData: _isSeamlessLoop 
-                ? FluentIcons.arrow_sync_24_filled 
-                : FluentIcons.arrow_sync_24_regular,
-            title: _isSeamlessLoop ? '关闭无感循环' : '开启无感循环',
-          ),
-        ],
-        placeholder: Container(
-          color: Colors.black,
-          child: const Center(
-            child: CircularProgressIndicator(),
-          ),
-        ),
-      );
-
       // 监听播放状态
       _videoController.addListener(_onVideoStateChanged);
+
+      // 启动进度更新
+      _startProgressTimer();
 
       // 启动无感循环检测
       if (_isSeamlessLoop) {
@@ -120,6 +88,12 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
 
       setState(() {
         _isInitialized = true;
+      });
+      
+      // 自动播放
+      _videoController.play();
+      setState(() {
+        _isPlaying = true;
       });
     } catch (e) {
       debugPrint('初始化播放器失败: $e');
@@ -140,8 +114,15 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
         _handleSeamlessLoop();
       }
     }
-    
-    setState(() {});
+  }
+
+  void _startProgressTimer() {
+    _progressTimer?.cancel();
+    _progressTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
+      if (mounted) {
+        setState(() {});
+      }
+    });
   }
 
   /// 启动无感循环检测
@@ -158,7 +139,6 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
       if (duration.inMilliseconds > 0) {
         final remainingMs = duration.inMilliseconds - position.inMilliseconds;
         
-        // 提前预加载循环
         if (remainingMs < _preloadMs && remainingMs > 0 && !_isPreparingLoop) {
           _handleSeamlessLoop();
         }
@@ -166,20 +146,18 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
     });
   }
 
-  /// 无感循环处理 - 核心算法
+  /// 无感循环处理
   Future<void> _handleSeamlessLoop() async {
     if (!_isSeamlessLoop || _isPreparingLoop) return;
     
     _isPreparingLoop = true;
     
     try {
-      // 立即跳转到开头并播放，实现无感循环
       await _videoController.seekTo(Duration.zero);
       if (!_videoController.value.isPlaying) {
         await _videoController.play();
       }
     } finally {
-      // 短暂延迟后重置标志
       Future.delayed(const Duration(milliseconds: 200), () {
         _isPreparingLoop = false;
       });
@@ -235,12 +213,10 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
   void dispose() {
     _loopTimer?.cancel();
     _positionSaveTimer?.cancel();
-    _controlsAnimController?.dispose();
+    _progressTimer?.cancel();
     _videoController.removeListener(_onVideoStateChanged);
-    _chewieController?.dispose();
     _videoController.dispose();
     
-    // 恢复系统UI
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
@@ -257,67 +233,142 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
 
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        title: Text(
-          widget.videoName,
-          style: const TextStyle(fontSize: 16),
-        ),
-        actions: [
-          // 循环模式指示器
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            decoration: BoxDecoration(
-              color: _isSeamlessLoop
-                  ? colorScheme.primary.withOpacity(0.9)
-                  : Colors.white.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  _isSeamlessLoop
-                      ? FluentIcons.arrow_sync_24_filled
-                      : FluentIcons.arrow_sync_24_regular,
-                  color: Colors.white,
-                  size: 14,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  _isSeamlessLoop ? '无感循环' : '单次',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
+      body: Stack(
+        children: [
+          // 视频内容
+          Center(
+            child: _isInitialized
+                ? AspectRatio(
+                    aspectRatio: _videoController.value.aspectRatio,
+                    child: VideoPlayer(_videoController),
+                  )
+                : const CircularProgressIndicator(),
+          ),
+          
+          // 控制层
+          if (_isInitialized && _showControls)
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _showControls = false;
+                  });
+                },
+                child: Container(
+                  color: Colors.black26,
+                  child: Column(
+                    children: [
+                      // 顶部栏
+                      _buildTopBar(context, colorScheme),
+                      
+                      const Spacer(),
+                      
+                      // 中间播放按钮
+                      GestureDetector(
+                        onTap: _togglePlay,
+                        child: Container(
+                          width: 72,
+                          height: 72,
+                          decoration: BoxDecoration(
+                            color: colorScheme.primary.withOpacity(0.9),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            _isPlaying
+                                ? FluentIcons.pause_24_filled
+                                : FluentIcons.play_24_filled,
+                            color: Colors.white,
+                            size: 36,
+                          ),
+                        ),
+                      ),
+                      
+                      const Spacer(),
+                      
+                      // 底部控制栏
+                      _buildBottomControls(context, colorScheme),
+                    ],
                   ),
                 ),
-              ],
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.fullscreen),
-            onPressed: _toggleFullscreen,
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: GestureDetector(
-              onTap: _toggleControls,
-              child: Center(
-                child: _isInitialized && _chewieController != null
-                    ? Chewie(controller: _chewieController!)
-                    : const CircularProgressIndicator(),
               ),
             ),
-          ),
-          // 底部控制栏
-          if (_isInitialized) _buildBottomControls(context, colorScheme),
+          
+          // 点击显示控制层
+          if (_isInitialized && !_showControls)
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _showControls = true;
+                  });
+                },
+                child: Container(color: Colors.transparent),
+              ),
+            ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildTopBar(BuildContext context, ColorScheme colorScheme) {
+    return SafeArea(
+      child: Container(
+        padding: const EdgeInsets.all(AppTheme.spacingM),
+        child: Row(
+          children: [
+            IconButton(
+              icon: const Icon(Icons.arrow_back, color: Colors.white),
+              onPressed: () => Navigator.pop(context),
+            ),
+            Expanded(
+              child: Text(
+                widget.videoName,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            // 循环模式指示器
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: _isSeamlessLoop
+                    ? colorScheme.primary.withOpacity(0.9)
+                    : Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    _isSeamlessLoop
+                        ? FluentIcons.arrow_sync_24_filled
+                        : FluentIcons.arrow_sync_24_regular,
+                    color: Colors.white,
+                    size: 14,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    _isSeamlessLoop ? '无感循环' : '单次',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.fullscreen, color: Colors.white),
+              onPressed: _toggleFullscreen,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -326,11 +377,9 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
     final position = _videoController.value.position;
     final duration = _videoController.value.duration;
 
-    return Container(
-      color: Colors.black87,
-      padding: const EdgeInsets.all(AppTheme.spacingM),
-      child: SafeArea(
-        top: false,
+    return SafeArea(
+      child: Container(
+        padding: const EdgeInsets.all(AppTheme.spacingM),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -376,7 +425,7 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
               children: [
                 // 快退
                 IconButton(
-                  icon: const Icon(FluentIcons.rewind_24_filled, color: Colors.white),
+                  icon: const Icon(FluentIcons.rewind_24_filled, color: Colors.white, size: 28),
                   onPressed: () {
                     final newPosition = position - const Duration(seconds: 10);
                     _videoController.seekTo(
@@ -384,37 +433,30 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
                     );
                   },
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 24),
                 // 播放/暂停
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: colorScheme.primary,
-                    shape: BoxShape.circle,
-                  ),
-                  child: IconButton(
-                    icon: Icon(
-                      _videoController.value.isPlaying
+                GestureDetector(
+                  onTap: _togglePlay,
+                  child: Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: colorScheme.primary,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      _isPlaying
                           ? FluentIcons.pause_24_filled
                           : FluentIcons.play_24_filled,
                       color: Colors.white,
                       size: 28,
                     ),
-                    onPressed: () {
-                      if (_videoController.value.isPlaying) {
-                        _videoController.pause();
-                      } else {
-                        _videoController.play();
-                      }
-                      setState(() {});
-                    },
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 24),
                 // 快进
                 IconButton(
-                  icon: const Icon(FluentIcons.fast_forward_24_filled, color: Colors.white),
+                  icon: const Icon(FluentIcons.fast_forward_24_filled, color: Colors.white, size: 28),
                   onPressed: () {
                     final newPosition = position + const Duration(seconds: 10);
                     _videoController.seekTo(
@@ -430,9 +472,14 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
     );
   }
 
-  void _toggleControls() {
+  void _togglePlay() {
+    if (_isPlaying) {
+      _videoController.pause();
+    } else {
+      _videoController.play();
+    }
     setState(() {
-      _showControls = !_showControls;
+      _isPlaying = !_isPlaying;
     });
   }
 

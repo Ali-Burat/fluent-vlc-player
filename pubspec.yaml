@@ -12,7 +12,6 @@ dependencies:
   
   # Video Player
   video_player: ^2.8.3
-  chewie: ^1.7.4
   
   # State Management
   provider: ^6.1.1
@@ -24,9 +23,6 @@ dependencies:
   # Encryption for Vault
   encrypt: ^5.0.3
   crypto: ^3.0.3
-  
-  # Material You
-  dynamic_color: ^1.6.9
   
   # File Management
   file_picker: ^6.2.0
