@@ -11,8 +11,8 @@ dependencies:
     sdk: flutter
   
   # Video Player
-  video_player: ^2.8.2
-  chewie: ^1.7.1
+  video_player: ^2.8.3
+  chewie: ^1.7.4
   
   # State Management
   provider: ^6.1.1
@@ -26,16 +26,16 @@ dependencies:
   crypto: ^3.0.3
   
   # Material You
-  dynamic_color: ^1.6.8
+  dynamic_color: ^1.6.9
   
   # File Management
-  file_picker: ^6.1.1
+  file_picker: ^6.2.0
   
   # UI
   flutter_animate: ^4.3.0
   
   # Utils
-  uuid: ^4.2.2
+  uuid: ^4.3.3
   intl: ^0.18.1
   
   # Icons
