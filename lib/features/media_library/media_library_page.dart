@@ -17,8 +17,8 @@ class MediaLibraryPage extends StatefulWidget {
 }
 
 class _MediaLibraryPageState extends State<MediaLibraryPage> {
-  Map<String, List<VideoItem>> _folderVideos = {};
-  Map<String, String> _thumbnails = {}; // 文件夹缩略图
+  Map<String, List<VideoItemData>> _folderVideos = {};
+  Map<String, String> _thumbnails = {};
   bool _scanning = false;
   String? _selectedFolder;
   final List<String> _videoExtensions = ['.mp4', '.avi', '.mkv', '.mov', '.webm', '.flv', '.wmv', '.3gp', '.m4v', '.ts'];
@@ -30,10 +30,9 @@ class _MediaLibraryPageState extends State<MediaLibraryPage> {
     setState(() => _scanning = true);
     
     try {
-      final Map<String, List<VideoItem>> folders = {};
+      final Map<String, List<VideoItemData>> folders = {};
       final cacheDir = await getTemporaryDirectory();
       
-      // 扫描常见视频目录
       final dirs = [
         '/storage/emulated/0/Movies',
         '/storage/emulated/0/DCIM',
@@ -50,7 +49,6 @@ class _MediaLibraryPageState extends State<MediaLibraryPage> {
         }
       }
       
-      // 扫描外部存储根目录
       final extDir = Directory('/storage/emulated/0');
       if (await extDir.exists()) {
         await for (final entity in extDir.list()) {
@@ -63,7 +61,6 @@ class _MediaLibraryPageState extends State<MediaLibraryPage> {
         }
       }
       
-      // 为每个文件夹生成缩略图
       for (final folder in folders.keys) {
         final videos = folders[folder]!;
         if (videos.isNotEmpty) {
@@ -87,7 +84,6 @@ class _MediaLibraryPageState extends State<MediaLibraryPage> {
         }
       }
       
-      // 排序
       final sortedKeys = folders.keys.toList()..sort();
       final sortedFolders = Map.fromEntries(
         sortedKeys.map((k) => MapEntry(k, folders[k]!..sort((a, b) => a.name.compareTo(b.name))))
@@ -103,7 +99,7 @@ class _MediaLibraryPageState extends State<MediaLibraryPage> {
     }
   }
 
-  Future<void> _scanDirectory(Directory dir, Map<String, List<VideoItem>> folders, String cachePath, {int maxDepth = 3, int currentDepth = 0}) async {
+  Future<void> _scanDirectory(Directory dir, Map<String, List<VideoItemData>> folders, String cachePath, {int maxDepth = 3, int currentDepth = 0}) async {
     if (currentDepth >= maxDepth) return;
     
     try {
@@ -121,11 +117,13 @@ class _MediaLibraryPageState extends State<MediaLibraryPage> {
             final id = entity.path.hashCode.toString();
             final thumbPath = '$cachePath/$id.jpg';
             final hasThumb = await File(thumbPath).exists();
+            final size = await entity.length();
             
-            folders[folderName]!.add(VideoItem(
+            folders[folderName]!.add(VideoItemData(
               id: id,
               path: entity.path,
               name: p.basename(entity.path),
+              size: size,
               thumbnail: hasThumb ? thumbPath : null,
             ));
           }
@@ -133,9 +131,7 @@ class _MediaLibraryPageState extends State<MediaLibraryPage> {
           await _scanDirectory(entity, folders, cachePath, maxDepth: maxDepth, currentDepth: currentDepth + 1);
         }
       }
-    } catch (e) {
-      // 忽略权限错误
-    }
+    } catch (e) {}
   }
 
   String _formatSize(int bytes) {
@@ -193,7 +189,6 @@ class _MediaLibraryPageState extends State<MediaLibraryPage> {
             onTap: () => setState(() => _selectedFolder = folder),
             child: Row(
               children: [
-                // 缩略图
                 Container(
                   width: 80, height: 80,
                   color: colorScheme.surfaceVariant,
@@ -201,7 +196,6 @@ class _MediaLibraryPageState extends State<MediaLibraryPage> {
                       ? Image.file(File(thumbnail), fit: BoxFit.cover)
                       : Icon(FluentIcons.folder_24_filled, color: colorScheme.primary, size: 32),
                 ),
-                // 信息
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.all(12),
@@ -229,7 +223,6 @@ class _MediaLibraryPageState extends State<MediaLibraryPage> {
     
     return Column(
       children: [
-        // 返回按钮
         Container(
           padding: const EdgeInsets.all(8),
           child: Row(
@@ -242,7 +235,6 @@ class _MediaLibraryPageState extends State<MediaLibraryPage> {
           ),
         ),
         const Divider(height: 1),
-        // 视频列表
         Expanded(
           child: ListView.builder(
             padding: const EdgeInsets.all(8),
@@ -259,14 +251,13 @@ class _MediaLibraryPageState extends State<MediaLibraryPage> {
                         videoPath: video.path, 
                         videoName: video.name,
                         videoId: video.id,
-                        playlist: videos,
+                        playlist: videos.map((v) => VideoItem(id: v.id, path: v.path, name: v.name, thumbnail: v.thumbnail)).toList(),
                         currentIndex: index,
                       ),
                     ));
                   },
                   child: Row(
                     children: [
-                      // 缩略图
                       Container(
                         width: 100, height: 60,
                         color: colorScheme.surfaceVariant,
@@ -274,7 +265,6 @@ class _MediaLibraryPageState extends State<MediaLibraryPage> {
                             ? Image.file(File(video.thumbnail!), fit: BoxFit.cover)
                             : const Icon(FluentIcons.video_24_filled),
                       ),
-                      // 信息
                       Expanded(
                         child: Padding(
                           padding: const EdgeInsets.all(12),
@@ -298,20 +288,4 @@ class _MediaLibraryPageState extends State<MediaLibraryPage> {
       ],
     );
   }
-}
-
-class VideoItem {
-  final String id;
-  final String path;
-  final String name;
-  final int size;
-  final String? thumbnail;
-  
-  const VideoItem({
-    required this.id,
-    required this.path,
-    required this.name,
-    required this.size,
-    this.thumbnail,
-  });
 }

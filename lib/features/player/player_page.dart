@@ -393,7 +393,7 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
           const SizedBox(height: 12),
           Text('${(value * 100).toInt()}%', style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500)),
           const SizedBox(height: 4),
-          Text(label, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+          Text(label, style: const TextStyle(color: Colors.white.withOpacity(0.05)4, fontSize: 12)),
         ],
       ),
     );
@@ -521,7 +521,7 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
                       return Container(
                         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                         decoration: BoxDecoration(
-                          color: isCurrent ? cs.primary.withOpacity(0.2) : Colors.white5,
+                          color: isCurrent ? cs.primary.withOpacity(0.2) : Colors.white.withOpacity(0.05),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: ListTile(
@@ -609,7 +609,7 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
         const SizedBox(height: 16),
         const Text('设置', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
         const SizedBox(height: 20),
-        SwitchListTile(title: const Text('无感循环', style: TextStyle(color: Colors.white)), subtitle: const Text('循环时无黑屏闪烁', style: TextStyle(color: Colors.white54)), value: _loop, activeColor: Theme.of(ctx).colorScheme.primary, onChanged: (v) { setState(() => _loop = v); setSt(() {}); if (v) _startLoop(); else _loopTimer?.cancel(); }),
+        SwitchListTile(title: const Text('无感循环', style: TextStyle(color: Colors.white)), subtitle: const Text('循环时无黑屏闪烁', style: TextStyle(color: Colors.white.withOpacity(0.05)4)), value: _loop, activeColor: Theme.of(ctx).colorScheme.primary, onChanged: (v) { setState(() => _loop = v); setSt(() {}); if (v) _startLoop(); else _loopTimer?.cancel(); }),
         const SizedBox(height: 12),
         const Text('睡眠定时', style: TextStyle(color: Colors.white70, fontSize: 13)),
         const SizedBox(height: 8),
@@ -628,14 +628,14 @@ class _PlayerPageState extends State<PlayerPage> with TickerProviderStateMixin {
       Row(children: [Text('字幕$idx', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500)), const Spacer(), if (t.subtitles.isNotEmpty) Switch(value: show, activeColor: cs.primary, onChanged: (v) => upd(t, v)), TextButton(onPressed: () => _loadSub(idx), child: Text(t.subtitles.isEmpty ? '加载' : '更换', style: TextStyle(color: cs.primary)))]),
       if (t.subtitles.isNotEmpty) ...[
         const SizedBox(height: 8),
-        Row(children: [const Text('位置', style: TextStyle(color: Colors.white54, fontSize: 12)), Expanded(child: Slider(value: t.position, min: 0.1, max: 0.9, activeColor: cs.primary, onChanged: (v) => upd(t.copyWith(position: v), show))), Text(t.position < 0.4 ? '上' : t.position > 0.7 ? '下' : '中', style: const TextStyle(color: Colors.white38, fontSize: 11))]),
-        Row(children: [const Text('大小', style: TextStyle(color: Colors.white54, fontSize: 12)), Expanded(child: Slider(value: t.fontSize, min: 12, max: 28, activeColor: cs.primary, onChanged: (v) => upd(t.copyWith(fontSize: v), show))), Text('${t.fontSize.toInt()}', style: const TextStyle(color: Colors.white38, fontSize: 11))]),
+        Row(children: [const Text('位置', style: TextStyle(color: Colors.white.withOpacity(0.05)4, fontSize: 12)), Expanded(child: Slider(value: t.position, min: 0.1, max: 0.9, activeColor: cs.primary, onChanged: (v) => upd(t.copyWith(position: v), show))), Text(t.position < 0.4 ? '上' : t.position > 0.7 ? '下' : '中', style: const TextStyle(color: Colors.white38, fontSize: 11))]),
+        Row(children: [const Text('大小', style: TextStyle(color: Colors.white.withOpacity(0.05)4, fontSize: 12)), Expanded(child: Slider(value: t.fontSize, min: 12, max: 28, activeColor: cs.primary, onChanged: (v) => upd(t.copyWith(fontSize: v), show))), Text('${t.fontSize.toInt()}', style: const TextStyle(color: Colors.white38, fontSize: 11))]),
         // 背景透明度
-        Row(children: [const Text('背景', style: TextStyle(color: Colors.white54, fontSize: 12)), Expanded(child: Slider(value: t.bgOpacity, min: 0.0, max: 1.0, activeColor: cs.primary, onChanged: (v) => upd(t.copyWith(bgOpacity: v), show))), Text('${(t.bgOpacity * 100).toInt()}%', style: const TextStyle(color: Colors.white38, fontSize: 11))]),
-        const Text('文字颜色', style: TextStyle(color: Colors.white54, fontSize: 12)), const SizedBox(height: 6),
+        Row(children: [const Text('背景', style: TextStyle(color: Colors.white.withOpacity(0.05)4, fontSize: 12)), Expanded(child: Slider(value: t.bgOpacity, min: 0.0, max: 1.0, activeColor: cs.primary, onChanged: (v) => upd(t.copyWith(bgOpacity: v), show))), Text('${(t.bgOpacity * 100).toInt()}%', style: const TextStyle(color: Colors.white38, fontSize: 11))]),
+        const Text('文字颜色', style: TextStyle(color: Colors.white.withOpacity(0.05)4, fontSize: 12)), const SizedBox(height: 6),
         Wrap(spacing: 8, children: [Colors.white, Colors.yellow, Colors.cyan, Colors.green, Colors.pink].map((c) => GestureDetector(onTap: () => upd(t.copyWith(color: c), show), child: Container(width: 26, height: 26, decoration: BoxDecoration(color: c, shape: BoxShape.circle, border: t.color == c ? Border.all(color: cs.primary, width: 2) : null)))).toList()),
         const SizedBox(height: 8),
-        const Text('描边颜色', style: TextStyle(color: Colors.white54, fontSize: 12)), const SizedBox(height: 6),
+        const Text('描边颜色', style: TextStyle(color: Colors.white.withOpacity(0.05)4, fontSize: 12)), const SizedBox(height: 6),
         Wrap(spacing: 8, children: [null, Colors.black, Colors.white, Colors.yellow, Colors.cyan].map((c) => GestureDetector(onTap: () => upd(t.copyWith(strokeColor: c), show), child: Container(width: 26, height: 26, decoration: BoxDecoration(color: c ?? Colors.transparent, shape: BoxShape.circle, border: Border.all(color: t.strokeColor == c ? cs.primary : Colors.white24, width: t.strokeColor == c ? 2 : 1)), child: c == null ? const Icon(Icons.close, color: Colors.white38, size: 14) : null))).toList()),
       ],
     ]));
@@ -694,4 +694,21 @@ class VideoItem {
   final String? thumbnail;
   
   const VideoItem({required this.id, required this.path, required this.name, this.thumbnail});
+}
+
+// 统一的VideoItem类，包含size属性
+class VideoItemData {
+  final String id;
+  final String path;
+  final String name;
+  final int size;
+  final String? thumbnail;
+  
+  const VideoItemData({
+    required this.id, 
+    required this.path, 
+    required this.name,
+    required this.size,
+    this.thumbnail
+  });
 }
