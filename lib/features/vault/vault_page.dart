@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:encrypt/encrypt.dart' as enc;
 import 'package:crypto/crypto.dart';
 import 'dart:convert';
+import 'dart:typed_data';
 import '../../core/theme/app_theme.dart';
 import '../../core/services/settings_service.dart';
 
